@@ -7,7 +7,10 @@ games
 history
 places
 projects
-straight
+straight/repos
+straight/build
+straight/build-cache.el
+straight/modified
 tramp
 transient
 tree-sitter
