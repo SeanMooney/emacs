@@ -24,7 +24,7 @@
  ("jsonrpc" . "444cafedd091815e674b6c93458ba97a55a76928")
  ("marginalia" . "2ff4d690f78fb86573c11a32631e53627947ebee")
  ("melpa" . "a4eb76fa0ca7755430450c4987c4f8b5d980d957")
- ("nongnu-elpa" . "5623e3864f87f49d18bc48b3656dc0c2dea42973")
+ ("nongnu-elpa" . "0ef91e3285d0a55b9783ee12c7d346d99aa4af56")
  ("orderless" . "254f2412489bbbf62700f9d3d5f18e537841dcc3")
  ("pfuture" . "19b53aebbc0f2da31de6326c495038901bffb73c")
  ("posframe" . "12f540c9ad5da09673b2bca1132b41f94c134e82")
