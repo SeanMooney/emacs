@@ -1,0 +1,17 @@
+.cache
+.lsp-session*
+eln-cache
+elpa
+eshell
+games
+history
+places
+projects
+straight
+tramp
+transient
+tree-sitter
+url
+auto-save-list
+lit.el
+*~
