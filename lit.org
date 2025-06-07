@@ -1,336 +1,360 @@
-#+TITLE: Emacs Literate Configuration
+#+TITLE: Emacs: A Literate Configuration
 #+AUTHOR: Sean Mooney
 #+PROPERTY: header-args :tangle yes
+#+STARTUP: content
 
+This is a literate Emacs configuration file written in Org mode.
+The primary goal is to create a setup that is well-documented, modular, and easy to maintain.
+All configuration is tangled into `init.el` upon saving this file.
 
-* early init
-** early ui
+* Early Init
+This section contains critical setup that must run at the very beginning of the
+Emacs startup process, before any packages are loaded.
+
+** Early UI Tweaks
+These settings disable distracting UI elements and set up fundamental frame behavior
+to ensure a clean and predictable launch.
+
 #+BEGIN_SRC emacs-lisp
-  ;; early ui config
+  ;; Set frame behavior early
   (setq frame-resize-pixelwise t
-        frame-inhibit-implied-resize t
-        use-dialog-box t ; only for mouse events, which I seldom use
-        use-file-dialog nil
-        use-short-answers t
-        inhibit-splash-screen t
+        frame-inhibit-implied-resize t)
+
+  ;; Disable UI elements for a minimal appearance
+  (scroll-bar-mode -1)
+  (tool-bar-mode -1)
+  (tooltip-mode -1)
+  (menu-bar-mode -1)
+  (set-fringe-mode 10) ; A little breathing room
+
+  ;; Inhibit startup screens and messages for a faster, quieter launch
+  (setq inhibit-splash-screen t
         inhibit-startup-screen t
         inhibit-x-resources t
-        inhibit-startup-echo-area-message user-login-name ; read the docstring
-        inhibit-startup-buffer-menu t)
+        inhibit-startup-echo-area-message user-login-name
+        inhibit-startup-buffer-menu t
+        inhibit-startup-message t)
 
-  (setq inhibit-startup-message t)
-
-  (scroll-bar-mode -1)        ; Disable visible scrollbar
-  (tool-bar-mode -1)          ; Disable the toolbar
-  (tooltip-mode -1)           ; Disable tooltips
-  (set-fringe-mode 10)        ; Give some breathing room
-  (menu-bar-mode -1)          ; Disable the menu bar
-  (xterm-mouse-mode 1)
-
-  ;; Set up the visible bell
+  ;; Set up the visible bell instead of an audible one
   (setq visible-bell t)
 
-  ;; Disable line numbers for some modes
-  (dolist (mode '(org-mode-hook
-                  term-mode-hook
-                  shell-mode-hook
-                  treemacs-mode-hook
-                  eshell-mode-hook))
-    (add-hook mode (lambda () (display-line-numbers-mode 0))))
-
-  (setq-default fill-column 80)
+  ;; Use short 'y/n' answers instead of 'yes/no'
+  (setq use-short-answers t)
 #+END_SRC
 
-** early package manager setup
+** Package Management (straight.el)
+I use `straight.el` for package management, which works directly with Git repositories.
+It is paired with `use-package` for declarative configuration.
+This block bootstraps `straight.el` if it's not already installed.
+
 #+BEGIN_SRC emacs-lisp
-   (setq straight-use-package-by-default t)
-   (custom-set-variables
-    '(straight-recipe-overrides '((nil
-                                 (nongnu-elpa :type git
-                                              :repo "https://github.com/emacsmirror/nongnu_elpa"
-                                              :depth (full single-branch)
-                                              :local-repo "nongnu-elpa"
-                                              :build nil)))))
+  (setq straight-use-package-by-default t)
+  ;; Ensure we can get packages from nongnu.org
+  (custom-set-variables
+   '(straight-recipe-overrides '((nil
+                                (nongnu-elpa :type git
+                                             :repo "[https://github.com/emacsmirror/nongnu_elpa](https://github.com/emacsmirror/nongnu_elpa)"
+                                             :depth (full single-branch)
+                                             :local-repo "nongnu-elpa"
+                                             :build nil)))))
 
-   (defvar bootstrap-version)
-   (let ((bootstrap-file
-   	 (expand-file-name
-   	  "straight/repos/straight.el/bootstrap.el"
-   	  (or (bound-and-true-p straight-base-dir)
-   	      user-emacs-directory)))
-   	(bootstrap-version 7))
-     (unless (file-exists-p bootstrap-file)
-       (with-current-buffer
-   	  (url-retrieve-synchronously
-   	   "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
-   	   'silent 'inhibit-cookies)
-   	(goto-char (point-max))
-   	(eval-print-last-sexp)))
-     (load bootstrap-file nil 'nomessage))
+  (defvar bootstrap-version)
+  (let ((bootstrap-file
+         (expand-file-name
+          "straight/repos/straight.el/bootstrap.el"
+          (or (bound-and-true-p straight-base-dir)
+              user-emacs-directory)))
+        (bootstrap-version 7))
+    (unless (file-exists-p bootstrap-file)
+      (with-current-buffer
+          (url-retrieve-synchronously
+           "[https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el](https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el)"
+           'silent 'inhibit-cookies)
+        (goto-char (point-max))
+        (eval-print-last-sexp)))
+    (load bootstrap-file nil 'nomessage))
+
+  ;; Ensure all `use-package` declarations will try to install the package if missing.
+  (setq use-package-always-ensure t)
 #+END_SRC
-** early org config
+
+** Early Org Mode Setup
+This configures Org mode basics, especially the function to automatically tangle this configuration file
+(`Emacs.org` -> `init.el`) every time it is saved.
+
 #+BEGIN_SRC emacs-lisp
   (setq org-support-shift-select t)
 
-
-  (with-eval-after-load 'org
-    ;; This is needed as of Org 9.2
-    (require 'org-tempo)
-
-    (add-to-list 'org-structure-template-alist '("sh" . "src shell"))
-    (add-to-list 'org-structure-template-alist '("el" . "src emacs-lisp"))
-    (add-to-list 'org-structure-template-alist '("py" . "src python")))
-
-
   ;; Automatically tangle our Emacs.org config file when we save it
   (defun efs/org-babel-tangle-config ()
+    "Auto-tangle config file on save."
     (when (string-equal (file-name-directory (buffer-file-name))
                         (expand-file-name user-emacs-directory))
       ;; Dynamic scoping to the rescue
       (let ((org-confirm-babel-evaluate nil))
         (org-babel-tangle))))
 
-  (add-hook 'org-mode-hook (lambda () (add-hook 'after-save-hook #'efs/org-babel-tangle-config)))
+  (add-hook 'org-mode-hook
+            (lambda ()
+              (add-hook 'after-save-hook #'efs/org-babel-tangle-config nil 'local)))
 
+
+  (with-eval-after-load 'org
+    (require 'org-tempo) ;; Needed as of Org 9.2 for structure templates
+    (add-to-list 'org-structure-template-alist '("sh" . "src shell"))
+    (add-to-list 'org-structure-template-alist '("el" . "src emacs-lisp"))
+    (add-to-list 'org-structure-template-alist '("py" . "src python")))
 #+END_SRC
 
-* defaults
-** set default user name and email
+* Core Emacs Behavior
+This section configures the fundamental, non-UI behavior of Emacs, from user information to editing enhancements and file handling.
+
+** User & System Defaults
 #+BEGIN_SRC emacs-lisp
-  (setq user-full-name "Sean Mooney"
-	user-mail-address "sean@seanmooney.info")
+  (use-package emacs
+    :ensure nil
+    :custom
+    (user-full-name "Sean Mooney")
+    (user-mail-address "sean@seanmooney.info")
+    ;; Use UTF-8 everywhere
+    (coding-system-for-read 'utf-8)
+    (coding-system-for-write 'utf-8)
+    (ad-redefinition-action 'accept)
+    ;; Don't create lockfiles
+    (create-lockfiles nil)
+    ;; Disable backup files
+    (make-backup-files nil)
+    (backup-inhibited t))
 #+END_SRC
 
-** set default encodeing
+** Editing Enhancements
+These settings improve the core text editing experience.
+
 #+BEGIN_SRC emacs-lisp
-  (set-default-coding-systems 'utf-8)
+  (use-package emacs
+    :ensure nil
+    :bind (("M-o" . other-window)
+           ("M-j" . duplicate-dwim)
+           ("RET" . newline-and-indent)
+           ;; Unbind some keys to use for other purposes
+           ("C-z" . nil)
+           ("C-x C-z" . nil)
+           ("C-x C-k RET" . nil))
+    :custom
+    ;; Case-insensitive completion is more convenient.
+    (completion-ignore-case t)
+    (completions-detailed t)
+    ;; Highlight the current line in programming, text, and org modes.
+    (global-hl-line-mode t)
+    ;; When pasting, overwrite the currently selected region.
+    (delete-selection-mode 1)
+    ;; Assistive pop-up window for help commands
+    (help-window-select t)
+    ;; Don't store duplicate entries in the kill ring
+    (kill-do-not-save-duplicates t)
+    ;; Default width for text wrapping
+    (fill-column 80)
+    ;; Show column number in the mode line
+    (column-number-mode 1))
+
+  ;; Enable line numbers for modes where it's most useful.
+  (dolist (mode '(text-mode-hook
+                  prog-mode-hook
+                  conf-mode-hook))
+    (add-hook mode #'display-line-numbers-mode))
+
+  ;; But disable them for modes where they are distracting.
+  (dolist (mode '(org-mode-hook
+                  term-mode-hook
+                  shell-mode-hook
+                  treemacs-mode-hook
+                  eshell-mode-hook))
+    (add-hook mode (lambda () (display-line-numbers-mode -1))))
+
+
+  ;; Automatically pair delimiters like parentheses and quotes.
+  (use-package elec-pair
+    :ensure nil
+    :hook (after-init . electric-pair-mode)
+    :config
+    ;; A handy command for deleting a pair of surrounding delimiters.
+    (global-set-key (kbd "C-c d") #'delete-pair)
+    (setq delete-pair-blink-delay 0.0))
+
+  ;; Visually highlight matching parentheses.
+  (use-package paren
+    :ensure nil
+    :hook (after-init . show-paren-mode)
+    :custom
+    (show-paren-style 'mixed)
+    (show-paren-context-when-offscreen t))
+
+  ;; Allows repeating commands with C-x z.
+  (use-package repeat
+    :config
+    (repeat-mode 1))
 #+END_SRC
 
-** set default fonts
-We are going to use the fontaine package to manage
-fonts and provide presets
-#+BEGIN_SRC emacs-lisp
-      (setq fontaine-latest-state-file
-	    (locate-user-emacs-file "fontaine-latest-state.eld"))
-      (use-package fontaine
-	:demand t
-	:init
-	(progn
-	  (setq fontaine-presets
-	    '((small
-	       :default-height 90)
-	      (regular
-	       :default-height 120)
-	      (medium
-	       :default-weight semilight
-	       :default-height 140)
-	      (large
-	       :default-weight semilight
-	       :default-height 180
-	       :bold-weight extrabold)
-	      (t ; our shared fallback properties
-	       :default-family "Source Code Pro"
-	       :default-weight semilight
-	       :default-height 100
-	       :fixed-pitch-family nil ; falls back to :default-family
-	       :fixed-pitch-weight nil ; falls back to :default-weight
-	       :fixed-pitch-height 1.0
-	       :variable-pitch-family "FiraGO"
-	       :variable-pitch-weight normal
-	       :variable-pitch-height 1.05
-	       :bold-family nil ; use whatever the underlying face has
-	       :bold-weight bold
-	       :italic-family nil
-	       :italic-slant italic
-	       :line-spacing nil))))
-	;; :config
-	;; (progn
-	;;   (fontaine-set-preset 'regular))
-	)
+** File Handling & Saving
+This configures how Emacs handles files, symlinks, and saving state.
 
-      ;; fontaine does not define any key bindings.  This is just a sample that
-      ;; respects the key binding conventions.  Evaluate:
-      ;;
-      ;;     (info "(elisp) Key Binding Conventions")
-      (define-key global-map (kbd "C-c f") #'fontaine-set-preset)
+#+BEGIN_SRC emacs-lisp
+  (use-package files
+    :ensure nil
+    :straight (:type built-in)
+    :custom
+    ;; Prefer newer versions of files when loading Lisp code.
+    (load-prefer-newer t)
+    ;; Don't warn me about large files. I know what I'm doing.
+    (large-file-warning-threshold nil)
+    ;; When visiting a file, resolve symlinks to the true path.
+    (find-file-visit-truename t))
+
+  ;; Remember the cursor position in files between sessions.
+  (use-package saveplace
+    :ensure nil
+    :hook (after-init . save-place-mode))
+
+  ;; Remember minibuffer history between sessions.
+  (use-package savehist
+    :ensure nil
+    :hook (after-init . savehist-mode)
+    :custom (history-length 300))
+
+  ;; Automatically revert file buffers when they change on disk.
+  (use-package autorevert
+    :ensure nil
+    :config (global-auto-revert-mode 1))
 #+END_SRC
 
-* ui
-** pixel scroling
+** Version Control
+Settings for Emacs's built-in version control integration.
+
 #+BEGIN_SRC emacs-lisp
- (setq pixel-scroll-precision-mode t)
- (setq pixel-scroll-precision-use-momentum nil)
+  (use-package vc
+    :ensure nil
+    :custom
+    ;; VC should follow symbolic links.
+    (vc-follow-symlinks t))
 #+END_SRC
 
-** transparancy
-add minimal transparancy to emacs windows
+* User Interface
+This section covers all visual aspects of Emacs, from fonts and colors to window layouts and completion UIs.
+
+** Fonts (Fontaine)
+I use the `fontaine` package to easily switch between predefined font configurations. My default is `Source Code Pro` for code and `FiraGO` for proportional text.
+
 #+BEGIN_SRC emacs-lisp
+  (use-package fontaine
+    :demand t
+    :init
+    (setq fontaine-latest-state-file
+          (locate-user-emacs-file "fontaine-latest-state.eld"))
+    (setq fontaine-presets
+          '((small
+             :default-height 90)
+            (regular
+             :default-height 120)
+            (medium
+             :default-weight semilight
+             :default-height 140)
+            (large
+             :default-weight semilight
+             :default-height 180
+             :bold-weight extrabold)
+            (t ; our shared fallback properties
+             :default-family "Source Code Pro"
+             :default-weight semilight
+             :default-height 100
+             :variable-pitch-family "FiraGO"
+             :variable-pitch-weight normal
+             :variable-pitch-height 1.05
+             :bold-weight bold
+             :italic-slant italic)))
+    :bind ("C-c f" . fontaine-set-preset))
+#+END_SRC
+
+** Theming (ef-themes)
+I use the `ef-themes` collection by Protesilaos Stavrou for its excellent contrast and beautiful color palettes. I define a dark (`ef-cherie`) and light (`ef-summer`) theme to toggle between.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package ef-themes
+    :config
+    ;; Define the pair of themes to toggle between.
+    (setq ef-themes-to-toggle '(ef-cherie ef-summer))
+    ;; Disable all other themes to avoid awkward blending.
+    (mapc #'disable-theme custom-enabled-themes)
+    ;; Load the default dark theme.
+    (load-theme 'ef-cherie :no-confirm))
+#+END_SRC
+
+** Frame and Window Management
+These settings control the appearance of the Emacs frame, windows, and how they are split.
+
+#+BEGIN_SRC emacs-lisp
+  ;; Enable smooth, pixel-based scrolling.
+  (setq pixel-scroll-precision-mode t)
+  (setq pixel-scroll-precision-use-momentum nil)
+
+  ;; Add a hint of transparency and maximize the frame on startup.
   (set-frame-parameter (selected-frame) 'alpha-background 93)
   (add-to-list 'default-frame-alist '(alpha-background . 93))
   (set-frame-parameter (selected-frame) 'fullscreen 'maximized)
   (add-to-list 'default-frame-alist '(fullscreen . maximized))
-#+END_SRC
 
-** terminal
-#+BEGIN_SRC emacs-lisp
-  ;; On Terminal: changes the vertical separator to a full vertical line
-  ;;              and truncation symbol to a right arrow
+  ;; Improve display characters in terminal mode.
   (set-display-table-slot standard-display-table 'vertical-border ?\u2502)
   (set-display-table-slot standard-display-table 'truncation ?\u2192)
+
+  ;; Custom function to toggle a 2-window split between vertical and horizontal.
+  (defun toggle-window-split ()
+    "Switch between horizontal and vertical split window layout."
+    (interactive)
+    (if (= (count-windows) 2)
+        (let* ((this-win-buffer (window-buffer))
+               (next-win-buffer (window-buffer (next-window)))
+               (this-win-edges (window-edges (selected-window)))
+               (next-win-edges (window-edges (next-window)))
+               (this-win-2nd (not (and (<= (car this-win-edges) (car next-win-edges))
+                                       (<= (cadr this-win-edges) (cadr next-win-edges)))))
+               (splitter (if (= (car this-win-edges) (car (window-edges (next-window))))
+                             'split-window-horizontally
+                           'split-window-vertically)))
+          (delete-other-windows)
+          (let ((first-win (selected-window)))
+            (funcall splitter)
+            (if this-win-2nd (other-window 1))
+            (set-window-buffer (selected-window) this-win-buffer)
+            (set-window-buffer (next-window) next-win-buffer)
+            (select-window first-win)
+            (if this-win-2nd (other-window 1))))))
+  (global-set-key (kbd "C-c j") #'toggle-window-split)
 #+END_SRC
 
-** theme
-For now im gong to use the ef-themes package with
-ef-cherie as the default dark theme and ef-summer as
-the default light theme. this provide a resonable level
-of contrast with an pink colour pallet
-#+BEGIN_SRC emacs-lisp
-  ;; https://protesilaos.com/emacs/ef-themes
-  (use-package ef-themes)
-  (require 'ef-themes)
-
-  ;; If you like two specific themes and want to switch between them, you
-  ;; can specify them in `ef-themes-to-toggle' and then invoke the command
-  ;; `ef-themes-toggle'.  All the themes are included in the variable
-  ;; `ef-themes-collection'.
-  (setq ef-themes-to-toggle '(ef-cherie ef-summer))
-  ;; Disable all other themes to avoid awkward blending:
-  (mapc #'disable-theme custom-enabled-themes)
-
-  ;; Load the theme of choice:
-  (load-theme 'ef-cherie :no-confirm)
-#+END_SRC
-
-
-** ibuffer
-#+BEGIN_SRC emacs-lisp
-  ;; Ibuffer filters
-  (setq ibuffer-saved-filter-groups
-        '(("default"
-           ("org" (or
-                   (mode . org-mode)
-                   (name . "^\\*Org Src")
-                   (name . "^\\*Org Agenda\\*$")))
-           ("tramp" (name . "^\\*tramp.*"))
-           ("emacs" (or
-                     (name . "^\\*scratch\\*$")
-                     (name . "^\\*Messages\\*$")
-                     (name . "^\\*Warnings\\*$")
-                     (name . "^\\*Shell Command Output\\*$")
-                     (name . "^\\*Async-native-compile-log\\*$")
-                     (name . "^\\*straight-")))
-           ("dired" (mode . dired-mode))
-           ("terminal" (or
-                        (mode . term-mode)
-                        (mode . shell-mode)
-                        (mode . eshell-mode)))
-           ("help" (or
-                    (name . "^\\*Help\\*$")
-                    (name . "^\\*info\\*$")
-                    (name . "^\\*helpful"))))))
-  (add-hook 'ibuffer-mode-hook
-            (lambda ()
-              (ibuffer-switch-to-saved-filter-groups "default")))
-  (setq ibuffer-show-empty-filter-groups nil) ; don't show empty groups
-#+END_SRC
-
-** compilation
-#+begin_src emacs-lisp
-(setq compilation-scroll-output 'first-error)
-#+end_src
-
-** line numbers
-#+BEGIN_SRC emacs-lisp
-  (column-number-mode)
-  ;; Enable line numbers for some modes
-  (dolist (mode '(text-mode-hook
-		  prog-mode-hook
-		  conf-mode-hook))
-    (add-hook mode (lambda () (display-line-numbers-mode 1))))
-#+END_SRC
-** mini buffer
-*** vertico
-First we are going to use vertico as our mini buffer
-instead of ivy or helm. https://github.com/minad/vertico
+** Minibuffer & Completion Framework
+I use a modern completion system composed of several packages that work together.
+- =vertico= provides the core vertical minibuffer UI.
+- =marginalia= adds rich annotations (file permissions, command docs) to completions.
+- =orderless= enables powerful out-of-order matching.
+- =consult= enhances built-in commands like `find-file` and `switch-to-buffer` with previews.
+- =corfu= provides an in-buffer completion popup.
 
 #+BEGIN_SRC emacs-lisp
-  ;; The `vertico' package applies a vertical layout to the minibuffer.
-  ;; It also pops up the minibuffer eagerly so we can see the available
-  ;; options without further interactions.  This package is very fast
-  ;; and "just works", though it also is highly customisable in case we
-  ;; need to modify its behaviour.
-  ;;
-  ;; Further reading: https://protesilaos.com/emacs/dotemacs#h:cff33514-d3ac-4c16-a889-ea39d7346dc5
   (use-package vertico
-    :ensure t
-    :config
-    (setq vertico-cycle t)
-    (setq vertico-resize nil)
-    (vertico-mode 1))
-  ;; Persist history over Emacs restarts. Vertico sorts by history position.
-  (use-package savehist
-    :init
-    (savehist-mode))
-
-#+END_SRC
-*** marginalia
-Next we are going to enhance the info show in vertico with marginalia
-#+BEGIN_SRC emacs-lisp
-  ;; The `marginalia' package provides helpful annotations next to
-  ;; completion candidates in the minibuffer.  The information on
-  ;; display depends on the type of content.  If it is about files, it
-  ;; shows file permissions and the last modified date.  If it is a
-  ;; buffer, it shows the buffer's size, major mode, and the like.
-  ;;
-  ;; Further reading: https://protesilaos.com/emacs/dotemacs#h:bd3f7a1d-a53d-4d3e-860e-25c5b35d8e7e
-  (use-package marginalia
-    :ensure t
-    :config
-    (marginalia-mode 1))
-#+END_SRC
-
-*** orderless
-and allow out of order searching with orderless
-#+BEGIN_SRC emacs-lisp
-  ;; The `orderless' package lets the minibuffer use an out-of-order
-  ;; pattern matching algorithm.  It matches space-separated words or
-  ;; regular expressions in any order.  In its simplest form, something
-  ;; like "ins pac" matches `package-menu-mark-install' as well as
-  ;; `package-install'.  This is a powerful tool because we no longer
-  ;; need to remember exactly how something is named.
-  ;;
-  ;; Note that Emacs has lots of "completion styles" (pattern matching
-  ;; algorithms), but let us keep things simple.
-  ;;
-  ;; Further reading: https://protesilaos.com/emacs/dotemacs#h:7cc77fd0-8f98-4fc0-80be-48a758fcb6e2
-  (use-package orderless
-    :ensure t
-    :config
-    (setq completion-styles '(orderless flex basic))
+    :init (vertico-mode)
     :custom
+    (vertico-cycle t)
+    (vertico-resize nil))
+
+  (use-package marginalia
+    :after vertico
+    :init (marginalia-mode))
+
+  (use-package orderless
+    :custom
+    (completion-styles '(orderless flex basic))
     (completion-category-overrides '((file (styles basic partial-completion)))))
-#+END_SRC
 
-*** better completions
-
-Also, when using the built-in completion-at-point, the ~*Completions*~ buffer can
-sometimes take up the whole screen when there are a lot of candidates.
-
-**** limit completions to 15
-#+begin_src emacs-lisp
-  (unless (version< emacs-version "29.0")
-    (setq completions-max-height 15))
-#+end_src
-
-**** enabel tab complete
-#+begin_src emacs-lisp
-  (setq tab-always-indent 'complete)
-#+end_src
-
-*** Corfu
-For in-buffer pop-up completion.
-
-#+begin_src emacs-lisp
   (use-package corfu
     :custom
     (corfu-auto nil)
@@ -340,588 +364,292 @@ For in-buffer pop-up completion.
     :config
     (global-corfu-mode))
 
-#+end_src
-
-*** consult
-next we enable preview from the mini buffer with consult https://github.com/minad/consult
-#+BEGIN_SRC emacs-lisp
-  ;; The `consult' package provides lots of commands that are enhanced
-  ;; variants of basic, built-in functionality.  One of the headline
-  ;; features of `consult' is its preview facility, where it shows in
-  ;; another Emacs window the context of what is currently matched in
-  ;; the minibuffer.  Here I define key bindings for some commands you
-  ;; may find useful.  The mnemonic for their prefix is "alternative
-  ;; search" (as opposed to the basic C-s or C-r keys).
-  ;;
-  ;; Further reading: https://protesilaos.com/emacs/dotemacs#h:22e97b4c-d88d-4deb-9ab3-f80631f9ff1d
   (use-package consult
-    :ensure t
-    :bind (;; A recursive grep
-   	 ;; Search for files names recursively
-  	 ("C-x f" . consult-find)
-  	 ;; Search through the outline (headings) of the file
-  	 ("M-s M-o" . consult-outline)
-  	 ;; Search the current buffer
-  	 ("C-f" . consult-line)
-  	 ;; Switch to another buffer, or bookmarked file, or recently
-  	 ;; opened file.
-  	 ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
-  	 ("C-j" . consult-imenu)
-  	 ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
-  	 ("M-y" . consult-yank-pop)                ;; orig. yank-pop
-  	 ("M-g g" . consult-goto-line)           ;; orig. goto-line
-  	 ("C-c m" . consult-man)
-  	 ("C-c i" . consult-info)
-  	 ("C-c h" . consult-history)
-  	 ("M-s c" . consult-locate)
-         ("M-s g" . consult-grep)
-         ("M-s G" . consult-git-grep)
-         ("M-s r" . consult-ripgrep)
-         ;; Isearch integration
-         ("M-s e" . consult-isearch-history)
-         :map isearch-mode-map
-         ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
-         ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
-         ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
-         ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
-  	 )
+    :bind (("C-x f" . consult-find)
+           ("M-s M-o" . consult-outline)
+           ("C-f" . consult-line)
+           ("C-x b" . consult-buffer)                ; a powerful switch-to-buffer
+           ("C-j" . consult-imenu)
+           ("C-x p b" . consult-project-buffer)
+           ("M-y" . consult-yank-pop)
+           ("M-g g" . consult-goto-line)
+           ("C-c m" . consult-man)
+           ("C-c i" . consult-info)
+           ("C-c h" . consult-history)
+           ("M-s c" . consult-locate)
+           ("M-s g" . consult-grep)
+           ("M-s G" . consult-git-grep)
+           ("M-s r" . consult-ripgrep)
+           ;; Isearch integration
+           ("M-s e" . consult-isearch-history)
+           :map isearch-mode-map
+           ("M-e" . consult-isearch-history)
+           ("M-s e" . consult-isearch-history)
+           ("M-s l" . consult-line)
+           ("M-s L" . consult-line-multi))
     :init
+    ;; Add consult bindings to org-mode and org-agenda
     (with-eval-after-load "org"
       (keymap-set org-mode-map "C-j" #'consult-org-heading))
     (with-eval-after-load "org-agenda"
       (keymap-set org-agenda-mode-map "C-j" #'consult-org-agenda))
     :config
-    (setq consult-line-start-from-top nil))
+    (setq consult-line-start-from-top nil)
+    ;; Integrate with xref for "find definitions/references"
+    (with-eval-after-load "xref"
+      (require 'consult-xref)
+      (setq xref-show-xrefs-function #'consult-xref)
+      (setq xref-show-definitions-function #'consult-xref)))
 
-  ;; Use 'consult-xref as the xref functions.
-  (with-eval-after-load "xref"
-    (require 'consult-xref)
-    (setq xref-show-xrefs-function #'consult-xref)
-    (setq xref-show-definitions-function #'consult-xref))
-
-
-#+END_SRC
-** which key
-#+BEGIN_SRC emacs-lisp
-  (use-package which-key
-    :ensure t
-    :config
-    (which-key-mode))
-#+END_SRC
-** misc
-These dont realy fit anywhere else but i
-should move these if i add similar settings
-#+BEGIN_SRC emacs-lisp
-  (repeat-mode 1)
-  (setq large-file-warning-threshold nil)
-  (setq vc-follow-symlinks t)
-  (setq ad-redefinition-action 'accept)
-  (global-auto-revert-mode 1)
-  (add-hook 'prog-mode-hook #'hl-line-mode)
-  (add-hook 'text-mode-hook #'hl-line-mode)
-  (add-hook 'org-mode-hook #'hl-line-mode)
-  (setq use-short-answers t)
-  ;;; overwrite slection on paste
-  (delete-selection-mode t)
-#+END_SRC
-* remote utils
-** tramp
-#+BEGIN_SRC emacs-lisp
-  (use-package tramp
-    :ensure t)
-#+END_SRC
-
-* base emacs
-#+BEGIN_SRC emacs-lisp
-    (use-package emacs
-       :ensure nil
-       :bind
-       (("M-o" . other-window)
-        ("M-j" . duplicate-dwim)
-        ("M-g r" . recentf)
-        ("M-s g" . grep)
-        ("M-s f" . find-name-dired)
-        ("C-x C-b" . ibuffer)
-        ("RET" . newline-and-indent)
-        ("C-z" . nil)
-        ("C-x C-z" . nil)
-        ("C-x C-k RET" . nil))
-       :custom
-       (completion-ignore-case t)
-       (completions-detailed t)
-       (delete-selection-mode 1)
-       (help-window-select t)
-       (history-length 300)
-       (kill-do-not-save-duplicates t)
-       (create-lockfiles nil)   ; No backup files
-       (make-backup-files nil)  ; No backup files
-       (backup-inhibited t)     ; No backup files
-    )
-    ;;; ELEC_PAIR
-  (use-package elec-pair
+  (use-package emacs
     :ensure nil
-    :defer
-    :hook (after-init . electric-pair-mode))
-
-  ;;; PAREN
-  (use-package paren
-    :ensure nil
-    :hook (after-init . show-paren-mode)
     :custom
-    (show-paren-style 'mixed)
-    (show-paren-context-when-offscreen t)) ;; show matches within window splits
+    ;; Limit the height of the *Completions* buffer
+    (completions-max-height 15)
+    ;; Use TAB for completion first, then indent
+    (tab-always-indent 'complete))
+#+END_SRC
 
-  ;;; PROCED
-  (use-package proced
-    :ensure nil
-    :defer t
-    :custom
-    (proced-enable-color-flag t)
-    (proced-tree-flag t)
-    (proced-auto-update-flag 'visible)
-    (proced-auto-update-interval 1)
-    (proced-descent t)
-    (proced-filter 'user) ;; We can change interactively with `s'
-    :config
-    (add-hook 'proced-mode-hook
-              (lambda ()
-                (proced-toggle-auto-update 1))))
+** Dired (File Manager)
+Configuration for Dired, Emacs's built-in file manager.
 
-  ;;; remember minibuffer history
-  (savehist-mode 1)
-
-  ;;; remember place in file
-  (save-place-mode 1)
-
-  ;;; prefer newer files on load
-  (setq load-prefer-newer t)
-
-  ;;; follow symlinks
-  (setq find-file-visit-truename t)
-  (setq vc-follow-symlinks t)
-
-  ;;; DIRED
+#+BEGIN_SRC emacs-lisp
   (use-package dired
-    :ensure nil
     :straight (:type built-in)
+    :ensure nil
     :hook ((dired-mode . hl-line-mode)
-         (dired-mode . dired-hide-details-mode))
-    :config
-    (setq dired-listing-switches "-alFh")
-    (setq dired-dwim-target t)
+           (dired-mode . dired-hide-details-mode))
     :custom
+    (dired-listing-switches "-alFh") ; ls-like output
+    (dired-dwim-target t)            ; Smart target for copying/renaming
     (dired-recursive-copies 'always)
     (dired-recursive-deletes 'always)
-    ;; Auto refresh Dired, but be quiet about it
-    (global-auto-revert-non-file-buffers t)
-    (auto-revert-verbose nil)
-  )
-
+    (global-auto-revert-non-file-buffers t) ; Auto-refresh Dired buffers
+    (auto-revert-verbose nil))
 #+END_SRC
 
-* keybinds
+** Ibuffer (Buffer Manager)
+I use Ibuffer to manage open buffers, with custom groups to keep things organized.
 
-** build/rebuild
-
-#+begin_src emacs-lisp
-(global-set-key (kbd "C-c b") #'compile)
-(global-set-key (kbd "C-c B") #'recompile)
-#+end_src
-
-** =C-c d= delete pairs of surrounding characters
-
-#+begin_src emacs-lisp
-  (global-set-key (kbd "C-c d") #'delete-pair)
-  (setq delete-pair-blink-delay 0.0)
-#+end_src
-
-** use consult-imenu
-
-
-** =C-c j= Toggle window split
-[[https://www.emacswiki.org/emacs/ToggleWindowSplit][Toggling windows]] from vertical to horizontal splits and vice-versa.
-
-#+begin_src emacs-lisp
-  (defun toggle-window-split ()
-    "Switch between horizontal and vertical split window layout."
-    (interactive)
-    (if (= (count-windows) 2)
-        (let* ((this-win-buffer (window-buffer))
-               (next-win-buffer (window-buffer (next-window)))
-               (this-win-edges (window-edges (selected-window)))
-               (next-win-edges (window-edges (next-window)))
-               (this-win-2nd (not (and (<= (car this-win-edges)
-                                           (car next-win-edges))
-                                       (<= (cadr this-win-edges)
-                                           (cadr next-win-edges)))))
-               (splitter
-                (if (= (car this-win-edges)
-                       (car (window-edges (next-window))))
-                    'split-window-horizontally
-                  'split-window-vertically)))
-          (delete-other-windows)
-          (let ((first-win (selected-window)))
-            (funcall splitter)
-            (if this-win-2nd (other-window 1))
-            (set-window-buffer (selected-window) this-win-buffer)
-            (set-window-buffer (next-window) next-win-buffer)
-            (select-window first-win)
-            (if this-win-2nd (other-window 1))))))
-
-  (global-set-key (kbd "C-c j") #'toggle-window-split)
-#+end_src
-
-** =C-c k= kill all but one space
-
-#+begin_src emacs-lisp
-  (global-set-key (kbd "C-c k") #'bury-buffer)
-#+end_src
-
-** =C-c r= replace regexp
-
-#+begin_src emacs-lisp
-  (global-set-key (kbd "C-c r") #'replace-regexp)
-#+end_src
-
-** =C-c s= shell
-
-#+begin_src emacs-lisp
-  (global-set-key (kbd "C-c s s") #'shell)
-  (global-set-key (kbd "C-c s e") #'eshell)
-  (global-set-key (kbd "C-c s t") #'eat)
-  (global-set-key (kbd "C-c s a") #'ansi-term)
-#+end_src
-
-** =C-c w= whitespace mode
-
-#+begin_src emacs-lisp
-  (global-set-key (kbd "C-c w") #'whitespace-mode)
-#+end_src
-
-** =C-c x= misc. "execute" commands
-
-#+begin_src emacs-lisp
-  (global-set-key (kbd "C-c x r") #'restart-emacs)
-#+end_src
-
-* development
-** linters
-*** flycheck provides basic linting
 #+BEGIN_SRC emacs-lisp
+  (use-package ibuffer
+    :ensure nil
+    :bind ("C-x C-b" . ibuffer)
+    :custom
+    (ibuffer-show-empty-filter-groups nil)
+    (ibuffer-saved-filter-groups
+     '(("default"
+        ("org" (or (mode . org-mode) (name . "^\\*Org Src")))
+        ("emacs" (or (name . "^\\*scratch\\*$") (name . "^\\*Messages\\*$")))
+        ("dired" (mode . dired-mode))
+        ("terminal" (or (mode . term-mode) (mode . shell-mode)))
+        ("help" (or (name . "^\\*Help\\*$") (name . "^\\*helpful"))))))
+    :config
+    (add-hook 'ibuffer-mode-hook
+              (lambda () (ibuffer-switch-to-saved-filter-groups "default"))))
+#+END_SRC
+
+** Helper UI (which-key, treemacs)
+Additional UI packages that help with discoverability and navigation.
+
+#+BEGIN_SRC emacs-lisp
+  ;; `which-key` displays available keybindings in a popup.
+  (use-package which-key
+    :config
+    (which-key-mode))
+
+  ;; `treemacs` provides a file tree sidebar.
+  (use-package treemacs
+    :defer t
+    :bind (("M-0"       . treemacs-select-window)
+           ("C-x t 1"   . treemacs-delete-other-windows)
+           ("C-x t t"   . treemacs)
+           ("C-x t d"   . treemacs-select-directory))
+    :config
+    (setq treemacs-collapse-dirs (if treemacs-python-executable 3 0)
+          treemacs-display-in-side-window t
+          treemacs-follow-after-init t
+          treemacs-expand-after-init t
+          treemacs-git-command-pipe ""
+          treemacs-hide-dot-git-directory t
+          treemacs-indentation 2
+          treemacs-litter-directories '("/node_modules" "/.venv" "/.cask")
+          treemacs-position 'left
+          treemacs-show-hidden-files t
+          treemacs-width 35)
+    (treemacs-follow-mode t)
+    (treemacs-filewatch-mode t)
+    (treemacs-fringe-indicator-mode 'always))
+#+END_SRC
+
+* Development Environment
+This section configures Emacs for software development, including linters,
+language servers, and language-specific setups.
+
+** General Tooling (LSP, Linters, Compilation)
+These are language-agnostic tools that form the foundation of the IDE experience.
+
+#+BEGIN_SRC emacs-lisp
+  ;; `flycheck` is a modern on-the-fly syntax checking framework.
   (use-package flycheck
-    :ensure t
     :init (global-flycheck-mode))
-  (add-hook 'prog-mode-hook #'flymake-mode)
-#+END_SRC
-*** spellchecking
-#+BEGIN_SRC emacs-lisp
-  (defun flyspell-on-for-buffer-type ()
-	"Enable Flyspell appropriately for the major mode of the current buffer.  Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only strings and comments get checked.  All other buffers get `flyspell-mode' to check all text.  If flyspell is already enabled, does nothing."
-	(interactive)
-	(if (not (symbol-value flyspell-mode)) ; if not already on
-	  (progn
-	    (if (derived-mode-p 'prog-mode)
-	      (progn
-		(message "Flyspell on (code)")
-		(flyspell-prog-mode))
-	      ;; else
-	      (progn
-		(message "Flyspell on (text)")
-		(flyspell-mode 1)))
-	    ;; I tried putting (flyspell-buffer) here but it didn't seem to work
-	    )))
 
-  (defun flyspell-toggle ()
-    "Turn Flyspell on if it is off, or off if it is on.  When turning on, it uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
+  ;; `flymake` is the built-in alternative. I bind keys for navigating its diagnostics.
+  (use-package flymake
+    :ensure nil
+    :bind (:map flymake-mode-map
+           ("C-c n" . flymake-goto-next-error)
+           ("C-c p" . flymake-goto-prev-error)))
+
+  ;; `eglot` is a minimal, built-in LSP client.
+  (use-package eglot
+    :hook ((prog-mode . eglot-ensure))
+    :bind (("C-c l c" . eglot-reconnect)
+           ("C-c l d" . flymake-show-buffer-diagnostics)
+           ("C-c l f f" . eglot-format)
+           ("C-c l f b" . eglot-format-buffer)
+           ("C-c l l" . eglot)
+           ("C-c l r n" . eglot-rename)
+           ("C-c l s" . eglot-shutdown)
+           ("C-c l i" . eglot-inlay-hints-mode))
+    :custom
+    ;; Shutdown LSP server when the last managed buffer is killed.
+    (eglot-autoshutdown t))
+
+  ;; Configuration for Emacs's compilation interface.
+  (use-package compile
+    :ensure nil
+    :bind (("C-c b" . compile)
+           ("C-c B" . recompile))
+    :custom
+    (compilation-scroll-output 'first-error))
+#+END_SRC
+
+** Spell Checking (Flyspell)
+I use Flyspell for on-the-fly spell checking, with a helper function to toggle it intelligently based on whether I'm writing code or prose.
+
+#+BEGIN_SRC emacs-lisp
+  (defun my-flyspell-setup ()
+    "Enable Flyspell based on major mode.
+In `prog-mode`, only check comments and strings.
+In `text-mode`, check everything."
+    (if (derived-mode-p 'prog-mode)
+        (flyspell-prog-mode)
+      (flyspell-mode 1)))
+
+  (add-hook 'text-mode-hook #'my-flyspell-setup)
+  (add-hook 'prog-mode-hook #'my-flyspell-setup)
+
+  (defun my-flyspell-toggle ()
+    "Toggle Flyspell on or off."
     (interactive)
     (if (symbol-value flyspell-mode)
-	(progn ; flyspell is on, turn it off
-	  (message "Flyspell off")
-	  (flyspell-mode -1))
-       ; else - flyspell is off, turn it on
-      (flyspell-on-for-buffer-type)))
-  (global-set-key (kbd "C-c f") 'flyspell-toggle )
-  (add-hook 'find-file-hook 'flyspell-on-for-buffer-type)
+        (progn (flyspell-mode -1) (message "Flyspell off"))
+      (my-flyspell-setup)
+      (message "Flyspell on")))
+
+  (global-set-key (kbd "C-c $") #'my-flyspell-toggle)
 #+END_SRC
 
-*** flymake
+** Tree-sitter
+Tree-sitter provides faster and more accurate syntax parsing, which improves highlighting and code analysis. `treesit-auto` manages the installation of parsers.
 
-#+begin_src emacs-lisp
-(use-package flymake
-  :bind (:map flymake-mode-map
-         ("C-c n" . flymake-goto-next-error)
-         ("C-c p" . flymake-goto-prev-error)))
-#+end_src
-
-** lsp
-
-*** eglot
-#+begin_src emacs-lisp
-  (defun crafted-ide--add-eglot-hooks (mode-list)
-    "Add `eglot-ensure' to modes in MODE-LIST.
-
-  The mode must be loaded, i.e. found with `fboundp'.  A mode which
-  is not loaded will not have a hook added, in which case add it
-  manually with something like this:
-
-  `(add-hook 'some-mode-hook #'eglot-ensure)'"
-    (dolist (mode-def mode-list)
-      (let ((mode (if (listp mode-def) (car mode-def) mode-def)))
-        (cond
-         ((listp mode) (crafted-ide--add-eglot-hooks mode))
-         (t
-          (when (and (fboundp mode)
-                     (not (eq 'clojure-mode mode))  ; prefer cider
-                     (not (eq 'lisp-mode mode))     ; prefer sly/slime
-                     (not (eq 'scheme-mode mode))   ; prefer geiser
-                     )
-            (let ((hook-name (format "%s-hook" (symbol-name mode))))
-              (message "adding eglot to %s" hook-name)
-              (add-hook (intern hook-name) #'eglot-ensure))))))))
-
-  (defun crafted-ide--lsp-bin-exists-p (mode-def)
-    "Return non-nil if LSP binary of MODE-DEF is found via `executable-find'."
-    (let ((lsp-program (cdr mode-def)))
-      ;; `lsp-program' is either a list of strings or a function object
-      ;; calling `eglot-alternatives'.
-      (if (functionp lsp-program)
-          (condition-case nil
-              (car (funcall lsp-program))
-            ;; When an error occurs it's because Eglot checked for a
-            ;; binary and didn't find one among alternatives.
-            (error nil))
-        (executable-find (car lsp-program)))))
-
-  (defun crafted-ide-eglot-auto-ensure-all ()
-    "Add `eglot-ensure' to major modes that offer LSP support.
-
-  Major modes are only selected if the major mode's associated LSP
-  binary is detected on the system."
-    (when (require 'eglot nil :noerror)
-      (crafted-ide--add-eglot-hooks (seq-filter
-                                     #'crafted-ide--lsp-bin-exists-p
-                                     eglot-server-programs))))
-
-  ;; Shutdown server when last managed buffer is killed
-  (customize-set-variable 'eglot-autoshutdown t)
-  ;; enable eglot
-  (crafted-ide-eglot-auto-ensure-all)
-
-  (use-package eglot
-  :bind (("C-c l c" . eglot-reconnect)
-         ("C-c l d" . flymake-show-buffer-diagnostics)
-         ("C-c l f f" . eglot-format)
-         ("C-c l f b" . eglot-format-buffer)
-         ("C-c l l" . eglot)
-         ("C-c l r n" . eglot-rename)
-         ("C-c l s" . eglot-shutdown)
-         ("C-c l i" . eglot-inlay-hints-mode)))
-
-#+end_src
-
-** languages
-
-*** Markdown
-
-#+begin_src emacs-lisp
-(use-package markdown-mode
-  :ensure t
-  :mode ("README\\.md\\'" . gfm-mode)
-  :init (setq markdown-command "multimarkdown")
-  :bind (:map markdown-mode-map
-         ("C-c C-e" . markdown-do)))
-#+end_src
-
-*** python
-
-**** Ignore =.venv= in VC operations
-
-#+begin_src emacs-lisp
-  (add-to-list 'vc-directory-exclusion-list ".venv")
-#+end_src
-
-**** allow venv management
-
-#+begin_src emacs-lisp
-  ;; https://fredrikmeyer.net/2020/08/26/emacs-python-venv.html
-  (use-package pyvenv
-    :ensure t
+#+BEGIN_SRC emacs-lisp
+  (use-package treesit-auto
+    :custom
+    (treesit-auto-install 'prompt)
     :config
-    (pyvenv-mode t)
+    (treesit-auto-add-to-auto-mode-alist 'all)
+    (global-treesit-auto-mode))
+#+END_SRC
 
-    ;; Set correct Python interpreter
+** Language: Python
+This section configures the Python development environment, including virtual environment management with `pyvenv` and linting with `ruff`.
+
+#+BEGIN_SRC emacs-lisp
+  (add-to-list 'vc-directory-exclusion-list ".venv")
+
+  (use-package pyvenv
+    :config
+    (pyvenv-mode 1)
+    ;; Set correct Python interpreter when a virtual env is activated/deactivated.
     (setq pyvenv-post-activate-hooks
           (list (lambda ()
                   (setq python-shell-interpreter (concat pyvenv-virtual-env "bin/python3")))))
     (setq pyvenv-post-deactivate-hooks
           (list (lambda ()
                   (setq python-shell-interpreter "python3")))))
-#+end_src
 
-**** Python check with "ruff"
-Another nice vanilla feature of ~python-mode~ is =M-x python-check=, which runs a
-pre-specified linter.  Setting that to ~mypy~ or ~pyright~ if either of those
-programs exist is a small time saver.
-
-#+begin_src emacs-lisp
   (use-package python
-    :config
-    (require 'eglot)
-    (setq python-check-command "ruff check --ignore-noqa")
-    (add-hook 'python-mode-hook #'flymake-mode)
-    (add-hook 'python-ts-mode-hook #'flymake-mode))
-#+end_src
+    :ensure nil
+    :custom
+    ;; Use the fast and powerful `ruff` linter for checking Python code.
+    (python-check-command "ruff check --ignore-noqa"))
+#+END_SRC
 
-** =direnv= Managing project environment variables
+** Project-Specific Environment (direnv)
+`direnv` is a tool that loads and unloads environment variables depending on the current directory. This package integrates it with Emacs.
 
-#+begin_src emacs-lisp
+#+BEGIN_SRC emacs-lisp
   (use-package direnv
-    :config (direnv-mode))
-#+end_src
-
-** eat terminal
-
-#+begin_src emacs-lisp
-  ;; (use-package eat
-  ;;   :ensure t
-  ;;   :config
-  ;;   (eat-eshell-mode)
-  ;;   (setq eshell-visual-commands '()))
-
-  
-
-(straight-use-package
- '(eat :type git
-       :host codeberg
-       :repo "akib/emacs-eat"
-       :files ("*.el" ("term" "term/*.el") "*.texi"
-               "*.ti" ("terminfo/e" "terminfo/e/*")
-               ("terminfo/65" "terminfo/65/*")
-               ("integration" "integration/*")
-               (:exclude ".dir-locals.el" "*-tests.el"))))
-
-
-#+end_src
-
-** tree-sitter
-
-#+begin_src emacs-lisp
-(use-package treesit-auto
-  :custom
-  (treesit-auto-install 'prompt)
-  :config
-  (treesit-auto-add-to-auto-mode-alist 'all)
-  (global-treesit-auto-mode))
-#+end_src
-
-** treemacs
-
-#+begin_src emacs-lisp
-  (use-package treemacs
-    :ensure t
-    :defer t
-    :init
-    (with-eval-after-load 'winum
-      (define-key winum-keymap (kbd "M-0") #'treemacs-select-window))
     :config
-    (progn
-      (setq treemacs-collapse-dirs                   (if treemacs-python-executable 3 0)
-            treemacs-deferred-git-apply-delay        0.5
-            treemacs-directory-name-transformer      #'identity
-            treemacs-display-in-side-window          t
-            treemacs-eldoc-display                   'simple
-            treemacs-file-event-delay                2000
-            treemacs-file-extension-regex            treemacs-last-period-regex-value
-            treemacs-file-follow-delay               0.2
-            treemacs-file-name-transformer           #'identity
-            treemacs-follow-after-init               t
-            treemacs-expand-after-init               t
-            treemacs-find-workspace-method           'find-for-file-or-pick-first
-            treemacs-git-command-pipe                ""
-            treemacs-goto-tag-strategy               'refetch-index
-            treemacs-header-scroll-indicators        '(nil . "^^^^^^")
-            treemacs-hide-dot-git-directory          t
-            treemacs-indentation                     2
-            treemacs-indentation-string              " "
-            treemacs-is-never-other-window           nil
-            treemacs-max-git-entries                 5000
-            treemacs-missing-project-action          'ask
-            treemacs-move-files-by-mouse-dragging    t
-            treemacs-move-forward-on-expand          nil
-            treemacs-no-png-images                   nil
-            treemacs-no-delete-other-windows         t
-            treemacs-project-follow-cleanup          nil
-            treemacs-persist-file                    (expand-file-name ".cache/treemacs-persist" user-emacs-directory)
-            treemacs-position                        'left
-            treemacs-read-string-input               'from-child-frame
-            treemacs-recenter-distance               0.1
-            treemacs-recenter-after-file-follow      nil
-            treemacs-recenter-after-tag-follow       nil
-            treemacs-recenter-after-project-jump     'always
-            treemacs-recenter-after-project-expand   'on-distance
-            treemacs-litter-directories              '("/node_modules" "/.venv" "/.cask")
-            treemacs-project-follow-into-home        nil
-            treemacs-show-cursor                     nil
-            treemacs-show-hidden-files               t
-            treemacs-silent-filewatch                nil
-            treemacs-silent-refresh                  nil
-            treemacs-sorting                         'alphabetic-asc
-            treemacs-select-when-already-in-treemacs 'move-back
-            treemacs-space-between-root-nodes        t
-            treemacs-tag-follow-cleanup              t
-            treemacs-tag-follow-delay                1.5
-            treemacs-text-scale                      nil
-            treemacs-user-mode-line-format           nil
-            treemacs-user-header-line-format         nil
-            treemacs-wide-toggle-width               70
-            treemacs-width                           35
-            treemacs-width-increment                 1
-            treemacs-width-is-initially-locked       t
-            treemacs-workspace-switch-cleanup        nil)
+    (direnv-mode))
+#+END_SRC
 
-      ;; The default width and height of the icons is 22 pixels. If you are
-      ;; using a Hi-DPI display, uncomment this to double the icon size.
-      ;;(treemacs-resize-icons 44)
+* Shell & Terminals
+Configuration for various terminal emulators inside Emacs. I use `eat`, a modern term-mode replacement.
 
-      (treemacs-follow-mode t)
-      (treemacs-filewatch-mode t)
-      (treemacs-fringe-indicator-mode 'always)
-      (when treemacs-python-executable
-        (treemacs-git-commit-diff-mode t))
+#+BEGIN_SRC emacs-lisp
+  (straight-use-package
+   '(eat :type git
+         :host codeberg
+         :repo "akib/emacs-eat"
+         :files ("*.el" ("term" "term/*.el") "*.texi"
+                 "*.ti" ("terminfo/e" "terminfo/e/*")
+                 ("terminfo/65" "terminfo/65/*")
+                 ("integration" "integration/*")
+                 (:exclude ".dir-locals.el" "*-tests.el"))))
 
-      (pcase (cons (not (null (executable-find "git")))
-                   (not (null treemacs-python-executable)))
-        (`(t . t)
-         (treemacs-git-mode 'deferred))
-        (`(t . _)
-         (treemacs-git-mode 'simple)))
+  (use-package eat
+    :ensure nil ; It's installed by `straight-use-package` above
+    :bind (("C-c s s" . shell)
+           ("C-c s e" . eshell)
+           ("C-c s t" . eat)
+           ("C-c s a" . ansi-term)))
+#+END_SRC
 
-      (treemacs-hide-gitignored-files-mode nil))
-    :bind
-    (:map global-map
-          ("M-0"       . treemacs-select-window)
-          ("C-x t 1"   . treemacs-delete-other-windows)
-          ("C-x t t"   . treemacs)
-          ("C-x t d"   . treemacs-select-directory)
-          ("C-x t B"   . treemacs-bookmark)
-          ("C-x t C-t" . treemacs-find-file)
-          ("C-x t M-t" . treemacs-find-tag)))
-#+end_src
+* GPT & AI
+Configuration for `gptel`, a client for interacting with Large Language Models.
 
-** gptel
-
-#+begin_src emacs-lisp
+#+BEGIN_SRC emacs-lisp
   (use-package gptel
-   :config
-   (setq gptel-default-mode 'org-mode)
-   ;; default backend
-   (setq gptel-backend (gptel-make-ollama "Ollama"             
-    :host "192.168.16.172:11434"               ;Where it's running               
-    :stream t                             
-    :models '("hf.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:UD-Q4_K_XL"
-  	    "omaciel/ticketeer-granite3.3"
-  	    "hf.co/unsloth/GLM-Z1-9B-0414-GGUF:Q5_K_XL"
-              )))        
-   )
-#+end_src
+    :custom
+    (gptel-default-mode 'org-mode)
+    :config
+    ;; Configure to use a local Ollama instance
+    (setq gptel-backend (
+        gptel-make-ollama "Ollama"
+        :host "192.168.16.172:11434"
+        :stream t
+        :models '(
+            "hf.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:UD-Q4_K_XL"
+            "omaciel/ticketeer-granite3.3"
+            "hf.co/unsloth/GLM-Z1-9B-0414-GGUF:Q5_K_XL"))))
+#+END_SRC
 
+* Custom Commands & Bindings
+This section is for custom functions and global keybindings that don't belong to a specific package.
+
+#+BEGIN_SRC emacs-lisp
+  ;; Bury the current buffer instead of killing it.
+  (global-set-key (kbd "C-c k") #'bury-buffer)
+
+  ;; A convenient key for replacing text via regexp.
+  (global-set-key (kbd "C-c r") #'replace-regexp)
+
+  ;; Toggles whitespace visibility.
+  (global-set-key (kbd "C-c w") #'whitespace-mode)
+
+  ;; Command to fully restart the Emacs process.
+  (global-set-key (kbd "C-c x r") #'restart-emacs)
+#+END_SRC
