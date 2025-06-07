@@ -721,6 +721,17 @@ should move these if i add similar settings
 
 ** languages
 
+*** Markdown
+
+#+begin_src emacs-lisp
+(use-package markdown-mode
+  :ensure t
+  :mode ("README\\.md\\'" . gfm-mode)
+  :init (setq markdown-command "multimarkdown")
+  :bind (:map markdown-mode-map
+         ("C-c C-e" . markdown-do)))
+#+end_src
+
 *** python
 
 **** Ignore =.venv= in VC operations
@@ -907,7 +918,9 @@ programs exist is a small time saver.
    (setq gptel-backend (gptel-make-ollama "Ollama"             
     :host "192.168.16.172:11434"               ;Where it's running               
     :stream t                             
-    :models '("granite3.2:8b"
+    :models '("hf.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:UD-Q4_K_XL"
+  	    "omaciel/ticketeer-granite3.3"
+  	    "hf.co/unsloth/GLM-Z1-9B-0414-GGUF:Q5_K_XL"
               )))        
    )
 #+end_src

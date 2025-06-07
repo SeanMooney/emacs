@@ -22,3 +22,20 @@
 (require 'org)
 (org-babel-load-file (expand-file-name "lit.org" user-emacs-directory))
 
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(ignored-local-variable-values '((encoding . utf-8)))
+ '(straight-recipe-overrides
+   '((nil
+      (nongnu-elpa :type git :repo "https://github.com/emacsmirror/nongnu_elpa"
+		   :depth (full single-branch) :local-repo "nongnu-elpa" :build
+		   nil)))))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
