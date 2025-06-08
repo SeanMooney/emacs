@@ -224,7 +224,14 @@ This configures how Emacs handles files, symlinks, and saving state.
   ;; Automatically revert file buffers when they change on disk.
   (use-package autorevert
     :ensure nil
-    :config (global-auto-revert-mode 1))
+    :custom
+    (auto-revert-interval 1)                    ; Check every second
+    (auto-revert-check-vc-info t)              ; Also check version control info
+    (auto-revert-verbose t)                    ; Show messages when reverting
+    (global-auto-revert-non-file-buffers t)   ; Also revert non-file buffers like Dired
+    (auto-revert-avoid-polling nil)            ; Use file notifications when available
+    :config 
+    (global-auto-revert-mode 1))
 #+END_SRC
 
 ** Persistent Undo
@@ -458,9 +465,7 @@ Configuration for Dired, Emacs's built-in file manager.
     (dired-listing-switches "-alFh") ; ls-like output
     (dired-dwim-target t)            ; Smart target for copying/renaming
     (dired-recursive-copies 'always)
-    (dired-recursive-deletes 'always)
-    (global-auto-revert-non-file-buffers t) ; Auto-refresh Dired buffers
-    (auto-revert-verbose nil))
+    (dired-recursive-deletes 'always))
 #+END_SRC
 
 ** Ibuffer (Buffer Manager)
