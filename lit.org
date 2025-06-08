@@ -540,13 +540,21 @@ These are language-agnostic tools that form the foundation of the IDE experience
       ;; Shutdown LSP server when the last managed buffer is killed.
       (eglot-autoshutdown t))
 
+    ;; Debugging support
+    (use-package dap-mode
+      :after eglot
+      :config
+      (dap-auto-configure-mode))
+
     ;; Configuration for Emacs's compilation interface.
     (use-package compile
       :ensure nil
       :bind (("C-c b" . compile)
-             ("C-c B" . recompile))
+             ("C-c B" . recompile)
+             ("C-c t" . recompile)) ; Quick test binding
       :custom
-      (compilation-scroll-output 'first-error))
+      (compilation-scroll-output 'first-error)
+      (compilation-skip-threshold 2)) ; Skip warnings
 #+END_SRC
 
 ** Spell Checking (Flyspell)
@@ -632,6 +640,29 @@ This section configures the Markdown syntax highlighting.
     (direnv-mode))
 #+END_SRC
 
+** Project Configuration (editorconfig)
+EditorConfig helps maintain consistent coding styles across different editors and IDEs.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package editorconfig
+    :config
+    (editorconfig-mode 1))
+#+END_SRC
+
+** Enhanced Project Management
+Enhanced project.el integration with useful keybindings for project-based workflows.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package project
+    :ensure nil
+    :bind (("C-x p p" . project-switch-project)
+           ("C-x p f" . project-find-file)
+           ("C-x p g" . project-find-regexp)
+           ("C-x p d" . project-find-dir)
+           ("C-x p s" . project-shell)
+           ("C-x p e" . project-eshell)))
+#+END_SRC
+
 * Shell & Terminals
 Configuration for various terminal emulators inside Emacs. I use `eat`, a modern term-mode replacement.
 
@@ -651,7 +682,12 @@ Configuration for various terminal emulators inside Emacs. I use `eat`, a modern
     :bind (("C-c s s" . shell)
            ("C-c s e" . eshell)
            ("C-c s t" . eat)
-           ("C-c s a" . ansi-term)))
+           ("C-c s a" . ansi-term)
+           ("C-c s p" . eat-project)) ; Project-specific terminal
+    :config
+    ;; Disable global-hl-line-mode in eat buffers for better visibility
+    (add-hook 'eat-mode-hook 
+              (lambda () (setq-local global-hl-line-mode nil))))
 #+END_SRC
 
 * GPT & AI
@@ -663,15 +699,24 @@ Configuration for `gptel`, a client for interacting with Large Language Models.
     :custom
     (gptel-default-mode 'org-mode)
     :config
-    ;; Configure to use a local Ollama instance
-    (setq gptel-backend (
-        gptel-make-ollama "Ollama"
-        :host "192.168.16.172:11434"
-        :stream t
-        :models '(
-            "hf.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:UD-Q4_K_XL"
-            "omaciel/ticketeer-granite3.3"
-            "hf.co/unsloth/GLM-Z1-9B-0414-GGUF:Q5_K_XL"))))
+    ;; Configure to use a local Ollama instance with configurable host
+    (let ((ollama-host (or (getenv "OLLAMA_HOST") "192.168.16.172:11434")))
+      (setq gptel-backend (gptel-make-ollama "Ollama"
+                            :host ollama-host
+                            :stream t
+                            :models '("hf.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:UD-Q4_K_XL"
+                                     "omaciel/ticketeer-granite3.3"
+                                     "hf.co/unsloth/GLM-Z1-9B-0414-GGUF:Q5_K_XL"))))
+    ;; Add error handling for unavailable backends
+    :init
+    (defun my/gptel-check-backend ()
+      "Check if gptel backend is available and provide feedback."
+      (condition-case err
+          (gptel--model-capable-p 'stream)
+        (error 
+         (message "GPTel backend unavailable: %s" (error-message-string err))
+         nil)))
+    (add-hook 'gptel-pre-request-hook #'my/gptel-check-backend))
   (require 'gptel-integrations)
 #+END_SRC
 
@@ -688,25 +733,31 @@ model with relevant information about the project you're working on.
     :after gptel
     :custom
     (mcp-hub-servers
-     `(;; 1. A Filesystem Server (Enabled by default)
+     `(;; 1. A Filesystem Server (with error checking)
        ;; This server exposes the root directory of your current project to the LLM.
-       ;; It requires `npx` and the MCP filesystem server to be available.
-       ;; You can install the server with: npm install -g @modelcontextprotocol/server-filesystem
-       ("filesystem" . (:command "npx" :args ("-y" "@modelcontextprotocol/server-filesystem"
-                                                   ,(or (ignore-errors (project-root (project-current))) default-directory))))
+       ;; Only enabled if npx is available.
+       ,@(when (executable-find "npx")
+           `(("filesystem" . (:command "npx" 
+                             :args ("-y" "@modelcontextprotocol/server-filesystem"
+                                    ,(or (ignore-errors (project-root (project-current))) 
+                                         default-directory))))))
 
-       ;; 2. A Fetch Server (Commented out)
+       ;; 2. A Fetch Server (with error checking)
        ;; This server can fetch content from URLs.
-       ;; It requires `uvx` and `mcp-server-fetch` to be installed.
-       ;; ,("fetch" . (:command "uvx" :args ("mcp-server-fetch")))
-
-       ))
+       ;; Only enabled if uvx is available.
+       ,@(when (executable-find "uvx")
+           `(("fetch" . (:command "uvx" :args ("mcp-server-fetch")))))))
     :config
     ;; Load the hub functionality and tell gptel to use MCP as a context provider.
     (require 'mcp-hub)
     :hook
-    ;; Start all configured MCP servers when Emacs initializes.
-    (after-init . mcp-hub-start-all-server))
+    ;; Start all configured MCP servers when Emacs initializes, with error handling.
+    (after-init . (lambda () 
+                    (when mcp-hub-servers
+                      (condition-case err
+                          (mcp-hub-start-all-server)
+                        (error 
+                         (message "MCP servers failed to start: %s" (error-message-string err))))))))
 #+END_SRC
 
 ** claude-code
@@ -730,6 +781,34 @@ model with relevant information about the project you're working on.
 This section is for custom functions and global keybindings that don't belong to a specific package.
 
 #+BEGIN_SRC emacs-lisp
+  ;; AI-enhanced development commands
+  (defun my/explain-code-with-ai ()
+    "Explain selected code using AI."
+    (interactive)
+    (if (region-active-p)
+        (gptel-send (concat "Explain this code:\n\n" 
+                           (buffer-substring-no-properties 
+                            (region-beginning) (region-end))))
+      (message "Please select code to explain")))
+
+  (defun my/review-code-with-ai ()
+    "Review selected code for improvements."
+    (interactive)
+    (if (region-active-p)
+        (gptel-send (concat "Review this code for best practices and suggest improvements:\n\n" 
+                           (buffer-substring-no-properties 
+                            (region-beginning) (region-end))))
+      (message "Please select code to review")))
+
+  (defun my/document-code-with-ai ()
+    "Generate documentation for selected code using AI."
+    (interactive)
+    (if (region-active-p)
+        (gptel-send (concat "Generate documentation for this code:\n\n" 
+                           (buffer-substring-no-properties 
+                            (region-beginning) (region-end))))
+      (message "Please select code to document")))
+
   ;; Bury the current buffer instead of killing it.
   (global-set-key (kbd "C-c k") #'bury-buffer)
 
@@ -741,4 +820,9 @@ This section is for custom functions and global keybindings that don't belong to
 
   ;; Keybinding for the restart command.
   (global-set-key (kbd "C-c x r") #'restart-emacs)
+
+  ;; AI-enhanced development keybindings
+  (global-set-key (kbd "C-c a e") #'my/explain-code-with-ai)
+  (global-set-key (kbd "C-c a r") #'my/review-code-with-ai)
+  (global-set-key (kbd "C-c a d") #'my/document-code-with-ai)
 #+END_SRC
