@@ -288,6 +288,11 @@ I use the `fontaine` package to easily switch between predefined font configurat
              :default-weight semilight
              :default-height 180
              :bold-weight extrabold)
+            (dyslexia-friendly
+             :default-family "OpenDyslexic"
+             :variable-pitch-family "OpenDyslexic"
+             :default-height 130
+             :variable-pitch-height 1.1)
             (t ; our shared fallback properties
              :default-family "Source Code Pro"
              :default-weight semilight
@@ -298,6 +303,9 @@ I use the `fontaine` package to easily switch between predefined font configurat
              :bold-weight bold
              :italic-slant italic)))
     :bind ("C-c f" . fontaine-set-preset))
+
+  ;; Improve line spacing for better readability
+  (setq-default line-spacing 0.2)
 #+END_SRC
 
 ** Theming (ef-themes)
@@ -509,6 +517,82 @@ Additional UI packages that help with discoverability and navigation.
     (treemacs-fringe-indicator-mode 'always))
 #+END_SRC
 
+* Reading and Writing Support
+Configuration for packages that enhance reading comprehension and writing quality,
+particularly beneficial for dyslexic users.
+
+** Distraction-Free Writing (Olivetti)
+Creates a focused writing environment with comfortable margins and reduced visual clutter.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package olivetti
+    :bind ("C-c o" . olivetti-mode)
+    :custom
+    (olivetti-body-width 80)
+    (olivetti-minimum-body-width 60)
+    (olivetti-recall-visual-line-mode-entry-state t))
+#+END_SRC
+
+** Enhanced Writing Analysis (Writegood)
+Helps improve writing clarity and catch common errors beyond spell-checking.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package writegood-mode
+    :hook (text-mode . writegood-mode)
+    :bind ("C-c C-w" . writegood-mode)
+    :custom
+    (writegood-weasel-words-length 5))
+#+END_SRC
+
+** Code Spell Checking (Codespell)
+Codespell catches common spelling errors in code, comments, and documentation.
+Particularly useful for catching typos in variable names and comments.
+
+#+BEGIN_SRC emacs-lisp
+  ;; Codespell integration for catching spelling errors in code
+  (defun my-codespell-buffer ()
+    "Run codespell on the current buffer."
+    (interactive)
+    (if (executable-find "codespell")
+        (let ((temp-file (make-temp-file "codespell-")))
+          (write-region (point-min) (point-max) temp-file)
+          (with-temp-buffer
+            (call-process "codespell" nil t nil temp-file)
+            (if (> (buffer-size) 0)
+                (progn
+                  (display-buffer (current-buffer))
+                  (message "Codespell found issues - see *codespell* buffer"))
+              (message "No spelling errors found by codespell")))
+          (delete-file temp-file))
+      (message "Codespell not found. Install with: pip install codespell")))
+
+  (defun my-codespell-region (start end)
+    "Run codespell on the selected region."
+    (interactive "r")
+    (if (executable-find "codespell")
+        (let ((temp-file (make-temp-file "codespell-region-")))
+          (write-region start end temp-file)
+          (with-temp-buffer
+            (call-process "codespell" nil t nil temp-file)
+            (if (> (buffer-size) 0)
+                (progn
+                  (display-buffer (current-buffer))
+                  (message "Codespell found issues in region"))
+              (message "No spelling errors found in region")))
+          (delete-file temp-file))
+      (message "Codespell not found. Install with: pip install codespell")))
+
+  (defun my-codespell-project ()
+    "Run codespell on the current project."
+    (interactive)
+    (if (executable-find "codespell")
+        (if-let ((project-root (project-root (project-current))))
+            (let ((default-directory project-root))
+              (compile "codespell --skip=.git,*.lock,*.json"))
+          (message "Not in a project"))
+      (message "Codespell not found. Install with: pip install codespell")))
+#+END_SRC
+
 * Development Environment
 This section configures Emacs for software development, including linters,
 language servers, and language-specific setups.
@@ -550,27 +634,34 @@ These are language-agnostic tools that form the foundation of the IDE experience
     (use-package compile
       :ensure nil
       :bind (("C-c b" . compile)
-             ("C-c B" . recompile)
-             ("C-c t" . recompile)) ; Quick test binding
+             ("C-c B" . recompile)) ; Removed C-c t conflict
       :custom
       (compilation-scroll-output 'first-error)
       (compilation-skip-threshold 2)) ; Skip warnings
 #+END_SRC
 
-** Spell Checking (Flyspell)
-I use Flyspell for on-the-fly spell checking, with a helper function to toggle it intelligently based on whether I'm writing code or prose.
+** Enhanced Spell Checking (Flyspell)
+Improved spell checking with better visual feedback and workflow integration for dyslexic users.
 
 #+BEGIN_SRC emacs-lisp
   (defun my-flyspell-setup ()
-    "Enable Flyspell based on major mode.
-In `prog-mode`, only check comments and strings.
-In `text-mode`, check everything."
+    "Enable Flyspell based on major mode with enhanced settings."
     (if (derived-mode-p 'prog-mode)
         (flyspell-prog-mode)
-      (flyspell-mode 1)))
+      (flyspell-mode 1))
+    ;; Better visual feedback for dyslexic users
+    (set-face-attribute 'flyspell-incorrect nil 
+                        :underline '(:color "red" :style wave))
+    (set-face-attribute 'flyspell-duplicate nil 
+                        :underline '(:color "orange" :style wave)))
 
   (add-hook 'text-mode-hook #'my-flyspell-setup)
   (add-hook 'prog-mode-hook #'my-flyspell-setup)
+
+  ;; Quick correction keybindings
+  (with-eval-after-load 'flyspell
+    (define-key flyspell-mode-map (kbd "C-c s c") 'flyspell-correct-wrapper)
+    (define-key flyspell-mode-map (kbd "C-c s n") 'flyspell-goto-next-error))
 
   (defun my-flyspell-toggle ()
     "Toggle Flyspell on or off."
@@ -665,6 +756,7 @@ Enhanced project.el integration with useful keybindings for project-based workfl
 
 * Shell & Terminals
 Configuration for various terminal emulators inside Emacs. I use `eat`, a modern term-mode replacement.
+Terminal commands are bound under the `C-c t` prefix to avoid conflicts with spell-checking commands.
 
 #+BEGIN_SRC emacs-lisp
   (straight-use-package
@@ -679,11 +771,11 @@ Configuration for various terminal emulators inside Emacs. I use `eat`, a modern
 
   (use-package eat
     :ensure nil ; It's installed by `straight-use-package` above
-    :bind (("C-c s s" . shell)
-           ("C-c s e" . eshell)
-           ("C-c s t" . eat)
-           ("C-c s a" . ansi-term)
-           ("C-c s p" . eat-project)) ; Project-specific terminal
+    :bind (("C-c t s" . shell)
+           ("C-c t e" . eshell)
+           ("C-c t t" . eat)
+           ("C-c t a" . ansi-term)
+           ("C-c t p" . eat-project)) ; Project-specific terminal
     :config
     ;; Disable global-hl-line-mode in eat buffers for better visibility
     (add-hook 'eat-mode-hook 
@@ -821,8 +913,19 @@ This section is for custom functions and global keybindings that don't belong to
   ;; Keybinding for the restart command.
   (global-set-key (kbd "C-c x r") #'restart-emacs)
 
-  ;; AI-enhanced development keybindings
-  (global-set-key (kbd "C-c a e") #'my/explain-code-with-ai)
-  (global-set-key (kbd "C-c a r") #'my/review-code-with-ai)
-  (global-set-key (kbd "C-c a d") #'my/document-code-with-ai)
+  ;; AI-enhanced development keybindings (using C-c g prefix to avoid conflict with claude-code)
+  (global-set-key (kbd "C-c g e") #'my/explain-code-with-ai)
+  (global-set-key (kbd "C-c g r") #'my/review-code-with-ai)
+  (global-set-key (kbd "C-c g d") #'my/document-code-with-ai)
+
+  ;; Writing assistance and accessibility keybindings
+  (global-set-key (kbd "C-c o") #'olivetti-mode)          ; Focus mode
+  (global-set-key (kbd "C-c C-w") #'writegood-mode)       ; Toggle writing analysis
+  (global-set-key (kbd "C-c s c") #'flyspell-correct-wrapper) ; Quick spell correction
+  (global-set-key (kbd "C-c s n") #'flyspell-goto-next-error) ; Next spelling error
+  
+  ;; Codespell keybindings
+  (global-set-key (kbd "C-c s b") #'my-codespell-buffer)   ; Check buffer
+  (global-set-key (kbd "C-c s r") #'my-codespell-region)   ; Check region
+  (global-set-key (kbd "C-c s p") #'my-codespell-project)  ; Check project
 #+END_SRC
