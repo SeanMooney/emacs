@@ -39,7 +39,7 @@ to ensure a clean and predictable launch.
   (setq visible-bell t)
 
   ;; Use short 'y/n' answers instead of 'yes/no'
-  (setq use-short-answers t)
+  (defalias 'yes-or-no-p 'y-or-n-p)
 #+END_SRC
 
 ** Package Management (straight.el)
@@ -60,21 +60,21 @@ This block bootstraps `straight.el` if it's not already installed.
 
   (defvar bootstrap-version)
   (let ((bootstrap-file
-         (expand-file-name
-          "straight/repos/straight.el/bootstrap.el"
-          (or (bound-and-true-p straight-base-dir)
-              user-emacs-directory)))
+         (expand-file-name "straight/repos/straight.el/bootstrap.el"
+                           (or (bound-and-true-p straight-base-dir)
+                               user-emacs-directory)))
         (bootstrap-version 7))
     (unless (file-exists-p bootstrap-file)
       (with-current-buffer
           (url-retrieve-synchronously
-           "[https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el](https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el)"
+           "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
            'silent 'inhibit-cookies)
-        (goto-char (point-max))
-        (eval-print-last-sexp)))
+          (goto-char (point-max))
+          (eval-print-last-sexp)))
     (load bootstrap-file nil 'nomessage))
 
-  ;; Ensure all `use-package` declarations will try to install the package if missing.
+  (straight-use-package 'use-package)
+  (setq straight-use-package-by-default t)
   (setq use-package-always-ensure t)
 #+END_SRC
 
@@ -227,6 +227,23 @@ This configures how Emacs handles files, symlinks, and saving state.
     :config (global-auto-revert-mode 1))
 #+END_SRC
 
+** Persistent Undo
+
+This setup enables undo-tree-mode, a more powerful way of handling undo/redo that visualizes the history as a tree. More importantly, it configures Emacs to save the undo history of files to a dedicated directory (~/.config/emacs/undo/), so you can undo changes even after closing and reopening a file.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package undo-tree
+    :hook (after-init . global-undo-tree-mode)
+    :custom
+    ;; Save undo history across sessions
+    (undo-tree-auto-save-history t)
+    ;; Create the undo directory if it doesn't exist
+    (undo-tree-history-directory-alist
+     `(("." . ,(expand-file-name "undo/" user-emacs-directory))))
+    ;; Increase the amount of history stored
+    (undo-tree-buffer-size-limit (* 1024 1024 8)) ; 8MB
+    (undo-tree-max-history-size 1000))
+#+END_SRC
 ** Version Control
 Settings for Emacs's built-in version control integration.
 
@@ -236,6 +253,15 @@ Settings for Emacs's built-in version control integration.
     :custom
     ;; VC should follow symbolic links.
     (vc-follow-symlinks t))
+#+END_SRC
+** Version Control (Magit)
+settings for magit for more powerful git integration
+#+BEGIN_SRC emacs-lisp
+(use-package magit
+  :bind (("C-x g" . magit-status)
+         ("C-x M-g" . magit-dispatch))
+  :custom
+  (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
 #+END_SRC
 
 * User Interface
@@ -311,26 +337,19 @@ These settings control the appearance of the Emacs frame, windows, and how they 
     "Switch between horizontal and vertical split window layout."
     (interactive)
     (if (= (count-windows) 2)
-        (let* ((this-win-buffer (window-buffer))
-               (next-win-buffer (window-buffer (next-window)))
-               (this-win-edges (window-edges (selected-window)))
-               (next-win-edges (window-edges (next-window)))
-               (this-win-2nd (not (and (<= (car this-win-edges) (car next-win-edges))
-                                       (<= (cadr this-win-edges) (cadr next-win-edges)))))
-               (splitter (if (= (car this-win-edges) (car (window-edges (next-window))))
-                             'split-window-horizontally
-                           'split-window-vertically)))
+        (let* ((other-win (next-window))
+               ;; Is the split vertical? (i.e. do windows share a left edge)
+               (is-vertical-split (= (nth 0 (window-edges))
+                                     (nth 0 (window-edges other-win)))))
+          ;; Delete the other window, which collapses the split
           (delete-other-windows)
-          (let ((first-win (selected-window)))
-            (funcall splitter)
-            (if this-win-2nd (other-window 1))
-            (set-window-buffer (selected-window) this-win-buffer)
-            (set-window-buffer (next-window) next-win-buffer)
-            (select-window first-win)
-            (if this-win-2nd (other-window 1))))))
+          ;; And re-split in the other direction
+          (if is-vertical-split
+              (split-window-horizontally)
+            (split-window-vertically)))
+      (message "This command only works when there are exactly two windows.")))
   (global-set-key (kbd "C-c j") #'toggle-window-split)
 #+END_SRC
-
 ** Minibuffer & Completion Framework
 I use a modern completion system composed of several packages that work together.
 - =vertico= provides the core vertical minibuffer UI.
@@ -356,19 +375,27 @@ I use a modern completion system composed of several packages that work together
     (completion-category-overrides '((file (styles basic partial-completion)))))
 
   (use-package corfu
-    :custom
-    (corfu-auto nil)
-    (corfu-auto-delay 0.1)
-    (corfu-quit-no-match 'separator)
-    (global-corfu-modes '((not shell-mode) (not eshell-mode) t))
-    :config
-    (global-corfu-mode))
+      :hook (prog-mode . corfu-mode)
+      :custom
+      (corfu-auto nil)
+      (corfu-auto-delay 0.1)
+      (corfu-quit-no-match 'separator)
+      ;; Disable corfu in modes where it's disruptive
+      (corfu-mode-modes '(not eshell-mode shell-mode term-mode))
+      :init
+      (global-corfu-mode))
+
+  ;; Adds more completion sources (backends) for Corfu
+  (use-package cape
+    :init
+    (add-to-list 'completion-at-point-functions #'cape-file)
+    (add-to-list 'completion-at-point-functions #'cape-dabbrev))
 
   (use-package consult
     :bind (("C-x f" . consult-find)
            ("M-s M-o" . consult-outline)
            ("C-f" . consult-line)
-           ("C-x b" . consult-buffer)                ; a powerful switch-to-buffer
+           ("C-x b" . consult-buffer) ; a powerful switch-to-buffer
            ("C-j" . consult-imenu)
            ("C-x p b" . consult-project-buffer)
            ("M-y" . consult-yank-pop)
@@ -490,39 +517,36 @@ language servers, and language-specific setups.
 These are language-agnostic tools that form the foundation of the IDE experience.
 
 #+BEGIN_SRC emacs-lisp
-  ;; `flycheck` is a modern on-the-fly syntax checking framework.
-  (use-package flycheck
-    :init (global-flycheck-mode))
+    ;; `flymake` is the built-in alternative.
+    ;; I bind keys for navigating its diagnostics.
+    (use-package flymake
+      :ensure nil
+      :bind (:map flymake-mode-map
+             ("C-c n" . flymake-goto-next-error)
+             ("C-c p" . flymake-goto-prev-error)))
 
-  ;; `flymake` is the built-in alternative. I bind keys for navigating its diagnostics.
-  (use-package flymake
-    :ensure nil
-    :bind (:map flymake-mode-map
-           ("C-c n" . flymake-goto-next-error)
-           ("C-c p" . flymake-goto-prev-error)))
+    ;; `eglot` is a minimal, built-in LSP client.
+    (use-package eglot
+      :hook ((prog-mode . eglot-ensure))
+      :bind (("C-c l c" . eglot-reconnect)
+             ("C-c l d" . flymake-show-buffer-diagnostics)
+             ("C-c l f f" . eglot-format)
+             ("C-c l f b" . eglot-format-buffer)
+             ("C-c l l" . eglot)
+             ("C-c l r n" . eglot-rename)
+             ("C-c l s" . eglot-shutdown)
+             ("C-c l i" . eglot-inlay-hints-mode))
+      :custom
+      ;; Shutdown LSP server when the last managed buffer is killed.
+      (eglot-autoshutdown t))
 
-  ;; `eglot` is a minimal, built-in LSP client.
-  (use-package eglot
-    :hook ((prog-mode . eglot-ensure))
-    :bind (("C-c l c" . eglot-reconnect)
-           ("C-c l d" . flymake-show-buffer-diagnostics)
-           ("C-c l f f" . eglot-format)
-           ("C-c l f b" . eglot-format-buffer)
-           ("C-c l l" . eglot)
-           ("C-c l r n" . eglot-rename)
-           ("C-c l s" . eglot-shutdown)
-           ("C-c l i" . eglot-inlay-hints-mode))
-    :custom
-    ;; Shutdown LSP server when the last managed buffer is killed.
-    (eglot-autoshutdown t))
-
-  ;; Configuration for Emacs's compilation interface.
-  (use-package compile
-    :ensure nil
-    :bind (("C-c b" . compile)
-           ("C-c B" . recompile))
-    :custom
-    (compilation-scroll-output 'first-error))
+    ;; Configuration for Emacs's compilation interface.
+    (use-package compile
+      :ensure nil
+      :bind (("C-c b" . compile)
+             ("C-c B" . recompile))
+      :custom
+      (compilation-scroll-output 'first-error))
 #+END_SRC
 
 ** Spell Checking (Flyspell)
@@ -587,6 +611,18 @@ This section configures the Python development environment, including virtual en
     (python-check-command "ruff check --ignore-noqa"))
 #+END_SRC
 
+** Language: Markdown
+This section configures the Markdown syntax highlighting.
+
+#+begin_src emacs-lisp
+(use-package markdown-mode
+  :ensure t
+  :mode ("README\\.md\\'" . gfm-mode)
+  :init (setq markdown-command "multimarkdown")
+  :bind (:map markdown-mode-map
+         ("C-c C-e" . markdown-do)))
+#+end_src
+
 ** Project-Specific Environment (direnv)
 `direnv` is a tool that loads and unloads environment variables depending on the current directory. This package integrates it with Emacs.
 
@@ -619,6 +655,7 @@ Configuration for various terminal emulators inside Emacs. I use `eat`, a modern
 #+END_SRC
 
 * GPT & AI
+** gptel
 Configuration for `gptel`, a client for interacting with Large Language Models.
 
 #+BEGIN_SRC emacs-lisp
@@ -635,7 +672,43 @@ Configuration for `gptel`, a client for interacting with Large Language Models.
             "hf.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:UD-Q4_K_XL"
             "omaciel/ticketeer-granite3.3"
             "hf.co/unsloth/GLM-Z1-9B-0414-GGUF:Q5_K_XL"))))
+  (require 'gptel-integrations)
 #+END_SRC
+
+** Integrating the Model Context Protocol (MCP)
+
+This configures Emacs as a client for the Model Context Protocol (MCP),
+allowing gptel to automatically pull in context from external sources like
+the project's file system (a simple RAG setup). This provides the language
+model with relevant information about the project you're working on.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package mcp
+    :straight (mcp :type git :host github :repo "lizqwerscott/mcp.el")
+    :after gptel
+    :custom
+    (mcp-hub-servers
+     `(;; 1. A Filesystem Server (Enabled by default)
+       ;; This server exposes the root directory of your current project to the LLM.
+       ;; It requires `npx` and the MCP filesystem server to be available.
+       ;; You can install the server with: npm install -g @modelcontextprotocol/server-filesystem
+       ("filesystem" . (:command "npx" :args ("-y" "@modelcontextprotocol/server-filesystem"
+                                                   ,(or (ignore-errors (project-root (project-current))) default-directory))))
+
+       ;; 2. A Fetch Server (Commented out)
+       ;; This server can fetch content from URLs.
+       ;; It requires `uvx` and `mcp-server-fetch` to be installed.
+       ;; ,("fetch" . (:command "uvx" :args ("mcp-server-fetch")))
+
+       ))
+    :config
+    ;; Load the hub functionality and tell gptel to use MCP as a context provider.
+    (require 'mcp-hub)
+    :hook
+    ;; Start all configured MCP servers when Emacs initializes.
+    (after-init . mcp-hub-start-all-server))
+#+END_SRC
+
 
 * Custom Commands & Bindings
 This section is for custom functions and global keybindings that don't belong to a specific package.
@@ -650,6 +723,6 @@ This section is for custom functions and global keybindings that don't belong to
   ;; Toggles whitespace visibility.
   (global-set-key (kbd "C-c w") #'whitespace-mode)
 
-  ;; Command to fully restart the Emacs process.
+  ;; Keybinding for the restart command.
   (global-set-key (kbd "C-c x r") #'restart-emacs)
 #+END_SRC
