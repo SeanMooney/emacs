@@ -709,7 +709,23 @@ model with relevant information about the project you're working on.
     (after-init . mcp-hub-start-all-server))
 #+END_SRC
 
+** claude-code
 
+#+begin_src emacs-lisp
+  (use-package claude-code
+    :straight (:type git :host github :repo "stevemolitor/claude-code.el" :branch "main"
+               :files ("*.el" (:exclude "demo.gif")))
+    :bind-keymap
+    ("C-c a" . claude-code-command-map)  ; Choose your preferred prefix
+    :config
+    (claude-code-mode)
+    ;; Configure for your wide screen setup
+    (add-to-list 'display-buffer-alist
+                 '("^\\*claude\\*"
+                   (display-buffer-in-side-window)
+                   (side . right)
+                   (window-width . 0.33))))
+#+end_src
 * Custom Commands & Bindings
 This section is for custom functions and global keybindings that don't belong to a specific package.
 
