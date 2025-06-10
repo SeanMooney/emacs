@@ -1005,6 +1005,9 @@ model with relevant information about the project you're working on.
                :files ("*.el" (:exclude "demo.gif")))
     :bind-keymap
     ("C-c a" . claude-code-command-map)  ; Choose your preferred prefix
+    :custom
+    ;; Configure to use local claude installation
+    (claude-code-program "/home/smooney/.claude/local/claude")
     :config
     (claude-code-mode)
     ;; Configure for your wide screen setup
@@ -1166,9 +1169,9 @@ This section is for custom functions and global keybindings that don't belong to
   (global-set-key (kbd "C-c W") #'writegood-mode)         ; Toggle writing analysis
 
   ;; Spell checking keybindings (C-c s prefix)
-  (global-set-key (kbd "C-c s c") #'jinx-correct)           ; Quick spell correction
-  (global-set-key (kbd "C-c s n") #'jinx-next)              ; Next spelling error
-  (global-set-key (kbd "C-c s l") #'jinx-languages)         ; Change languages
+  (global-set-key (kbd "C-c s c") #'flyspell-correct-word-before-point)  ; Quick spell correction
+  (global-set-key (kbd "C-c s n") #'flyspell-goto-next-error)            ; Next spelling error
+  (global-set-key (kbd "C-c s l") #'ispell-change-dictionary)            ; Change dictionary
 
   ;; Codespell keybindings (C-c s prefix)
   (global-set-key (kbd "C-c s b") #'my-codespell-buffer)   ; Check buffer

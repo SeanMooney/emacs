@@ -59,7 +59,7 @@ This isn't vanilla Emacs. Here are the key differences you'll notice immediately
 
 ### ✍️ **Writing-First Design**
 - **Dyslexia-friendly fonts** and visual feedback
-- **Modern spell checking** with Jinx (faster than traditional flyspell)
+- **Traditional spell checking** with Flyspell (reliable and well-tested)
 - **Live word counting** in the mode line
 - **Distraction-free writing mode** with Olivetti
 - **Grammar and style analysis** with writegood-mode
@@ -232,7 +232,7 @@ C-c l i - toggle Inlay hints
 *Mnemonic: "LSP" - Language intelligence features*
 
 #### **C-c s** - **S**pell Checking & Language Tools
-**Modern Spell Checking (Jinx):**
+**Traditional Spell Checking (Flyspell):**
 ```
 C-c s c - Correct spelling
 C-c s n - Next spelling error
@@ -330,7 +330,7 @@ C-x t d - select Directory in treemacs
 M-<up>/M-<down> - Move text up/down
 M-j             - Duplicate line/region
 M-o             - Other window
-M-$             - Spell correct (jinx)
+M-$             - Spell correct (flyspell)
 M-0             - Select treemacs window
 ```
 
@@ -527,13 +527,13 @@ This configuration is built on carefully selected packages that work together se
 
 ### **✍️ Writing & Language Tools**
 
-#### **Jinx** - Modern Spell Checker
-- **What it does**: Fast, accurate spell checking using enchant backend
-- **Why it's better**: Faster than flyspell, better language support, async
+#### **Flyspell** - Traditional Spell Checker
+- **What it does**: Reliable spell checking using ispell/aspell backend
+- **Why it's reliable**: Well-tested, stable, works with syntax highlighting
 - **How to use**:
   - `M-$` → Quick correction
   - `C-c s c` → Correct spelling
-  - `C-c s l` → Switch languages
+  - `C-c s l` → Switch dictionaries
 - **Key features**: Multiple dictionaries, programming mode support
 
 #### **writegood-mode** - Writing Analysis
@@ -716,8 +716,8 @@ This configuration is built on carefully selected packages that work together se
 - Writing and coding assistance integrated
 
 ### **The Writing Stack**
-`Jinx` + `writegood-mode` + `wc-mode` + `Olivetti` + AI functions create a complete writing environment:
-- Modern spell checking with multiple languages
+`Flyspell` + `writegood-mode` + `wc-mode` + `Olivetti` + AI functions create a complete writing environment:
+- Traditional spell checking with multiple languages
 - Style analysis beyond spelling
 - Progress tracking with word counts
 - Distraction-free focus mode
@@ -802,7 +802,7 @@ This automatically validates your configuration before commits, preventing synta
    - `C-c g p` - Comprehensive proofreading
 
 ### Spell Checking & Grammar
-- **Automatic spell check** with modern Jinx
+- **Automatic spell check** with traditional Flyspell
 - **Quick corrections**: `M-$` on misspelled words
 - **Grammar analysis** automatic with writegood-mode
 - **Advanced spell options**: `C-c s` prefix commands
