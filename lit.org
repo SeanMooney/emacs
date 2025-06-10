@@ -40,6 +40,10 @@ to ensure a clean and predictable launch.
 
   ;; Use short 'y/n' answers instead of 'yes/no'
   (defalias 'yes-or-no-p 'y-or-n-p)
+
+  ;; Reduce native compilation noise
+  (setq native-comp-async-report-warnings-errors nil
+        native-comp-warning-on-missing-source nil)
 #+END_SRC
 
 ** Package Management (straight.el)
@@ -76,6 +80,14 @@ This block bootstraps `straight.el` if it's not already installed.
   (straight-use-package 'use-package)
   (setq straight-use-package-by-default t)
   (setq use-package-always-ensure t)
+
+  ;; Diminish hides or shortens minor mode names in the mode line
+  (straight-use-package 'diminish)
+
+  ;; GCMH - Garbage Collector Magic Hack for better performance
+  (use-package gcmh
+    :config
+    (gcmh-mode 1))
 #+END_SRC
 
 ** Early Org Mode Setup
@@ -88,11 +100,15 @@ This configures Org mode basics, especially the function to automatically tangle
   ;; Automatically tangle our Emacs.org config file when we save it
   (defun efs/org-babel-tangle-config ()
     "Auto-tangle config file on save."
-    (when (string-equal (file-name-directory (buffer-file-name))
-                        (expand-file-name user-emacs-directory))
-      ;; Dynamic scoping to the rescue
-      (let ((org-confirm-babel-evaluate nil))
-        (org-babel-tangle))))
+    (condition-case err
+        (when (and (buffer-file-name)
+                   (string-equal (file-name-directory (buffer-file-name))
+                                 (expand-file-name user-emacs-directory)))
+          ;; Dynamic scoping to the rescue
+          (let ((org-confirm-babel-evaluate nil))
+            (org-babel-tangle)))
+      (error 
+       (message "Error tangling config: %s" (error-message-string err)))))
 
   (add-hook 'org-mode-hook
             (lambda ()
@@ -193,6 +209,28 @@ These settings improve the core text editing experience.
   (use-package repeat
     :config
     (repeat-mode 1))
+
+  ;; Color-code matching delimiters for better code readability
+  (use-package rainbow-delimiters
+    :hook (prog-mode . rainbow-delimiters-mode))
+
+  ;; Move text (lines or regions) up and down
+  (use-package move-text
+    :bind (("M-<up>" . move-text-up)
+           ("M-<down>" . move-text-down))
+    :config
+    (move-text-default-bindings))
+
+  ;; Multiple cursors for simultaneous editing
+  (use-package multiple-cursors
+    :bind (("C-S-c C-S-c" . mc/edit-lines)                    ; Add cursor to each line in region
+           ("C->" . mc/mark-next-like-this)                   ; Mark next occurrence
+           ("C-<" . mc/mark-previous-like-this)               ; Mark previous occurrence  
+           ("C-c C-<" . mc/mark-all-like-this)                ; Mark all occurrences
+           ("C-S-<mouse-1>" . mc/add-cursor-on-click))        ; Add cursor with mouse
+    :config
+    ;; Don't warn about commands that haven't been used with multiple cursors
+    (setq mc/always-run-for-all t))
 #+END_SRC
 
 ** File Handling & Saving
@@ -274,6 +312,16 @@ settings for magit for more powerful git integration
          ("C-x M-g" . magit-dispatch))
   :custom
   (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
+
+;; Show git diff indicators in the fringe
+(use-package diff-hl
+  :hook ((prog-mode . diff-hl-mode)
+         (dired-mode . diff-hl-dired-mode))
+  :config
+  ;; Integration with magit - refresh diff-hl when magit updates
+  (with-eval-after-load 'magit
+    (add-hook 'magit-pre-refresh-hook #'diff-hl-magit-pre-refresh)
+    (add-hook 'magit-post-refresh-hook #'diff-hl-magit-post-refresh)))
 #+END_SRC
 
 * User Interface
@@ -318,6 +366,31 @@ I use the `fontaine` package to easily switch between predefined font configurat
 
   ;; Improve line spacing for better readability
   (setq-default line-spacing 0.2)
+
+  ;; Pulsar briefly highlights the current line after certain commands
+  ;; Excellent accessibility feature for tracking cursor movement
+  (use-package pulsar
+    :config
+    (pulsar-global-mode 1)
+    :custom
+    ;; Highlight line after these commands for better cursor tracking
+    (pulsar-pulse-functions '(isearch-repeat-forward
+                              isearch-repeat-backward
+                              recenter-top-bottom
+                              move-to-window-line-top-bottom
+                              reposition-window
+                              bookmark-jump
+                              other-window
+                              delete-window
+                              delete-other-windows
+                              forward-page
+                              backward-page
+                              scroll-up-command
+                              scroll-down-command
+                              windmove-right
+                              windmove-left
+                              windmove-up
+                              windmove-down)))
 #+END_SRC
 
 ** Theming (ef-themes)
@@ -471,6 +544,37 @@ Configuration for Dired, Emacs's built-in file manager.
     (dired-dwim-target t)            ; Smart target for copying/renaming
     (dired-recursive-copies 'always)
     (dired-recursive-deletes 'always))
+
+  ;; dired-x provides extra functionality for dired
+  (use-package dired-x
+    :ensure nil
+    :straight (:type built-in)
+    :after dired
+    :bind (("C-x C-j" . dired-jump))         ; Jump to dired of current file
+    :hook (dired-mode . dired-omit-mode)     ; Enable omit mode by default
+    :custom
+    (dired-omit-files "^\\.[^.]\\|^\\.\\.$\\|\\.DS_Store$\\|\\.localized$")
+    (dired-guess-shell-gnutar "tar"))
+
+  ;; Recent directories for quick access
+  (use-package dired-recent
+    :bind (("C-x C-d" . dired-recent-open))
+    :config
+    (dired-recent-mode 1))
+
+  ;; Ranger-style file browser with three-pane layout and previews
+  (use-package ranger
+    :bind (("C-x r d" . ranger)
+           ("C-x r j" . deer))          ; Minimal ranger mode
+    :custom
+    (ranger-cleanup-eagerly t)          ; Clean up ranger buffers
+    (ranger-cleanup-on-disable t)
+    (ranger-show-dotfiles t)
+    (ranger-preview-file t)             ; Show file previews
+    (ranger-max-preview-size 10)        ; Limit preview to 10MB files
+    :config
+    ;; Don't show hidden files by default (toggle with zh)
+    (setq ranger-show-hidden nil))
 #+END_SRC
 
 ** Ibuffer (Buffer Manager)
@@ -494,14 +598,38 @@ I use Ibuffer to manage open buffers, with custom groups to keep things organize
               (lambda () (ibuffer-switch-to-saved-filter-groups "default"))))
 #+END_SRC
 
-** Helper UI (which-key, treemacs)
+** Helper UI (which-key, helpful, treemacs)
 Additional UI packages that help with discoverability and navigation.
-
 #+BEGIN_SRC emacs-lisp
   ;; `which-key` displays available keybindings in a popup.
   (use-package which-key
     :config
     (which-key-mode))
+
+  ;; Enhanced help system with more detailed information and better formatting
+  (use-package helpful
+    :bind (("C-h f" . helpful-callable)   ; Enhanced function help
+           ("C-h v" . helpful-variable)   ; Enhanced variable help
+           ("C-h k" . helpful-key)        ; Enhanced key help
+           ("C-h x" . helpful-command))   ; Enhanced command help
+    :custom
+    ;; Show source code for elisp functions
+    (helpful-switch-buffer-function #'helpful-switch-to-buffer))
+
+  ;; Clean up mode line by hiding/shortening minor mode names
+  (use-package diminish
+    :ensure nil  ; Already installed above
+    :config
+    ;; Hide these minor modes from the mode line
+    (diminish 'which-key-mode)
+    (diminish 'eldoc-mode)
+    (diminish 'auto-revert-mode)
+    (diminish 'visual-line-mode)
+    (diminish 'subword-mode)
+    ;; Shorten these mode names
+    (diminish 'rainbow-delimiters-mode "🌈")
+    (diminish 'flyspell-mode "✓")
+    (diminish 'writegood-mode "✍"))
 
   ;; `treemacs` provides a file tree sidebar.
   (use-package treemacs
@@ -549,7 +677,6 @@ Helps improve writing clarity and catch common errors beyond spell-checking.
 #+BEGIN_SRC emacs-lisp
   (use-package writegood-mode
     :hook (text-mode . writegood-mode)
-    :bind ("C-c C-w" . writegood-mode)
     :custom
     (writegood-weasel-words-length 5))
 #+END_SRC
@@ -665,8 +792,10 @@ Improved spell checking with better visual feedback and workflow integration for
     (set-face-attribute 'flyspell-duplicate nil 
                         :underline '(:color "orange" :style wave)))
 
-  (add-hook 'text-mode-hook #'my-flyspell-setup)
-  (add-hook 'prog-mode-hook #'my-flyspell-setup)
+  (use-package flyspell
+    :ensure nil
+    :hook ((text-mode . my-flyspell-setup)
+           (prog-mode . my-flyspell-setup)))
 
   ;; Quick correction keybindings
   (with-eval-after-load 'flyspell
@@ -681,7 +810,6 @@ Improved spell checking with better visual feedback and workflow integration for
       (my-flyspell-setup)
       (message "Flyspell on")))
 
-  (global-set-key (kbd "C-c $") #'my-flyspell-toggle)
 #+END_SRC
 
 ** Tree-sitter
@@ -786,10 +914,7 @@ Terminal commands are bound under the `C-c t` prefix to avoid conflicts with spe
            ("C-c t t" . eat)
            ("C-c t a" . ansi-term)
            ("C-c t p" . eat-project)) ; Project-specific terminal
-    :config
-    ;; Disable global-hl-line-mode in eat buffers for better visibility
-    (add-hook 'eat-mode-hook 
-              (lambda () (setq-local global-hl-line-mode nil))))
+    :hook (eat-mode . (lambda () (setq-local global-hl-line-mode nil))))
 #+END_SRC
 
 * GPT & AI
@@ -852,14 +977,12 @@ model with relevant information about the project you're working on.
     :config
     ;; Load the hub functionality and tell gptel to use MCP as a context provider.
     (require 'mcp-hub)
-    :hook
-    ;; Start all configured MCP servers when Emacs initializes, with error handling.
-    (after-init . (lambda () 
-                    (when mcp-hub-servers
-                      (condition-case err
-                          (mcp-hub-start-all-server)
-                        (error 
-                         (message "MCP servers failed to start: %s" (error-message-string err))))))))
+    :hook (after-init . (lambda () 
+                          (when mcp-hub-servers
+                            (condition-case err
+                                (mcp-hub-start-all-server)
+                              (error 
+                               (message "MCP servers failed to start: %s" (error-message-string err)))))))))
 #+END_SRC
 
 ** claude-code
@@ -887,29 +1010,38 @@ This section is for custom functions and global keybindings that don't belong to
   (defun my/explain-code-with-ai ()
     "Explain selected code using AI."
     (interactive)
-    (if (region-active-p)
-        (gptel-send (concat "Explain this code:\n\n" 
-                           (buffer-substring-no-properties 
-                            (region-beginning) (region-end))))
-      (message "Please select code to explain")))
+    (condition-case err
+        (if (region-active-p)
+            (gptel-send (concat "Explain this code:\n\n" 
+                               (buffer-substring-no-properties 
+                                (region-beginning) (region-end))))
+          (message "Please select code to explain"))
+      (error 
+       (message "Error with AI explain: %s" (error-message-string err)))))
 
   (defun my/review-code-with-ai ()
     "Review selected code for improvements."
     (interactive)
-    (if (region-active-p)
-        (gptel-send (concat "Review this code for best practices and suggest improvements:\n\n" 
-                           (buffer-substring-no-properties 
-                            (region-beginning) (region-end))))
-      (message "Please select code to review")))
+    (condition-case err
+        (if (region-active-p)
+            (gptel-send (concat "Review this code for best practices and suggest improvements:\n\n" 
+                               (buffer-substring-no-properties 
+                                (region-beginning) (region-end))))
+          (message "Please select code to review"))
+      (error 
+       (message "Error with AI review: %s" (error-message-string err)))))
 
   (defun my/document-code-with-ai ()
     "Generate documentation for selected code using AI."
     (interactive)
-    (if (region-active-p)
-        (gptel-send (concat "Generate documentation for this code:\n\n" 
-                           (buffer-substring-no-properties 
-                            (region-beginning) (region-end))))
-      (message "Please select code to document")))
+    (condition-case err
+        (if (region-active-p)
+            (gptel-send (concat "Generate documentation for this code:\n\n" 
+                               (buffer-substring-no-properties 
+                                (region-beginning) (region-end))))
+          (message "Please select code to document"))
+      (error 
+       (message "Error with AI documentation: %s" (error-message-string err)))))
 
   ;; Bury the current buffer instead of killing it.
   (global-set-key (kbd "C-c k") #'bury-buffer)
@@ -924,18 +1056,20 @@ This section is for custom functions and global keybindings that don't belong to
   (defun my/comment-dwim-line-or-region ()
     "Comment or uncomment current line or region without moving cursor."
     (interactive)
-    (if (region-active-p)
-        ;; If region is selected, comment/uncomment the region
-        (comment-or-uncomment-region (region-beginning) (region-end))
-      ;; If no region, comment/uncomment current line without moving cursor
-      (save-excursion
-        (comment-line 1))))
+    (condition-case err
+        (if (region-active-p)
+            ;; If region is selected, comment/uncomment the region
+            (comment-or-uncomment-region (region-beginning) (region-end))
+          ;; If no region, comment/uncomment current line without moving cursor
+          (save-excursion
+            (comment-line 1)))
+      (error 
+       (message "Error commenting: %s" (error-message-string err)))))
 
   ;; Toggle comment/uncomment for region or line
   ;; Clear any existing binding for C-/ first
   (global-unset-key (kbd "C-/"))
   (global-set-key (kbd "C-/") #'my/comment-dwim-line-or-region)
-
 
   ;; Keybinding for the restart command.
   (global-set-key (kbd "C-c x r") #'restart-emacs)
@@ -947,11 +1081,14 @@ This section is for custom functions and global keybindings that don't belong to
 
   ;; Writing assistance and accessibility keybindings
   (global-set-key (kbd "C-c o") #'olivetti-mode)          ; Focus mode
-  (global-set-key (kbd "C-c C-w") #'writegood-mode)       ; Toggle writing analysis
+  (global-set-key (kbd "C-c W") #'writegood-mode)         ; Toggle writing analysis
+
+  ;; Spell checking keybindings (C-c s prefix)  
   (global-set-key (kbd "C-c s c") #'flyspell-correct-wrapper) ; Quick spell correction
   (global-set-key (kbd "C-c s n") #'flyspell-goto-next-error) ; Next spelling error
+  (global-set-key (kbd "C-c s t") #'my-flyspell-toggle)       ; Toggle flyspell
 
-  ;; Codespell keybindings
+  ;; Codespell keybindings (C-c s prefix)
   (global-set-key (kbd "C-c s b") #'my-codespell-buffer)   ; Check buffer
   (global-set-key (kbd "C-c s r") #'my-codespell-region)   ; Check region
   (global-set-key (kbd "C-c s p") #'my-codespell-project)  ; Check project
