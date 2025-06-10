@@ -241,6 +241,8 @@ This setup enables undo-tree-mode, a more powerful way of handling undo/redo tha
 #+BEGIN_SRC emacs-lisp
   (use-package undo-tree
     :hook (after-init . global-undo-tree-mode)
+    :bind (("C-z" . undo-tree-undo)
+           ("C-S-z" . undo-tree-redo))
     :custom
     ;; Save undo history across sessions
     (undo-tree-auto-save-history t)
@@ -249,7 +251,10 @@ This setup enables undo-tree-mode, a more powerful way of handling undo/redo tha
      `(("." . ,(expand-file-name "undo/" user-emacs-directory))))
     ;; Increase the amount of history stored
     (undo-tree-buffer-size-limit (* 1024 1024 8)) ; 8MB
-    (undo-tree-max-history-size 1000))
+    (undo-tree-max-history-size 1000)
+    :config
+    ;; Unbind C-/ from undo-tree to allow our comment binding
+    (define-key undo-tree-map (kbd "C-/") nil))
 #+END_SRC
 ** Version Control
 Settings for Emacs's built-in version control integration.
@@ -915,6 +920,23 @@ This section is for custom functions and global keybindings that don't belong to
   ;; Toggles whitespace visibility.
   (global-set-key (kbd "C-c w") #'whitespace-mode)
 
+  ;; Custom function to comment/uncomment line or region without moving cursor
+  (defun my/comment-dwim-line-or-region ()
+    "Comment or uncomment current line or region without moving cursor."
+    (interactive)
+    (if (region-active-p)
+        ;; If region is selected, comment/uncomment the region
+        (comment-or-uncomment-region (region-beginning) (region-end))
+      ;; If no region, comment/uncomment current line without moving cursor
+      (save-excursion
+        (comment-line 1))))
+
+  ;; Toggle comment/uncomment for region or line
+  ;; Clear any existing binding for C-/ first
+  (global-unset-key (kbd "C-/"))
+  (global-set-key (kbd "C-/") #'my/comment-dwim-line-or-region)
+
+
   ;; Keybinding for the restart command.
   (global-set-key (kbd "C-c x r") #'restart-emacs)
 
@@ -928,7 +950,7 @@ This section is for custom functions and global keybindings that don't belong to
   (global-set-key (kbd "C-c C-w") #'writegood-mode)       ; Toggle writing analysis
   (global-set-key (kbd "C-c s c") #'flyspell-correct-wrapper) ; Quick spell correction
   (global-set-key (kbd "C-c s n") #'flyspell-goto-next-error) ; Next spelling error
-  
+
   ;; Codespell keybindings
   (global-set-key (kbd "C-c s b") #'my-codespell-buffer)   ; Check buffer
   (global-set-key (kbd "C-c s r") #'my-codespell-region)   ; Check region
