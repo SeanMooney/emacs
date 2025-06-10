@@ -679,6 +679,15 @@ Helps improve writing clarity and catch common errors beyond spell-checking.
     :hook (text-mode . writegood-mode)
     :custom
     (writegood-weasel-words-length 5))
+
+  ;; Word count mode for writing progress tracking
+  (use-package wc-mode
+    :hook (text-mode . wc-mode)
+    :custom
+    (wc-modeline-format "WC[%tw,%tc,%tl]")  ; words, chars, lines
+    :config
+    ;; Update word count every 2 seconds
+    (setq wc-idle-wait 2))
 #+END_SRC
 
 ** Code Spell Checking (Codespell)
@@ -777,39 +786,36 @@ These are language-agnostic tools that form the foundation of the IDE experience
       (compilation-skip-threshold 2)) ; Skip warnings
 #+END_SRC
 
-** Enhanced Spell Checking (Flyspell)
-Improved spell checking with better visual feedback and workflow integration for dyslexic users.
+** Enhanced Spell Checking (Jinx)
+Modern, fast spell checker that replaces flyspell with better performance and accuracy.
 
 #+BEGIN_SRC emacs-lisp
-  (defun my-flyspell-setup ()
-    "Enable Flyspell based on major mode with enhanced settings."
-    (if (derived-mode-p 'prog-mode)
-        (flyspell-prog-mode)
-      (flyspell-mode 1))
-    ;; Better visual feedback for dyslexic users
-    (set-face-attribute 'flyspell-incorrect nil 
+  ;; Jinx - Modern spell checker (replaces flyspell)
+  (use-package jinx
+    :hook (emacs-startup . global-jinx-mode)
+    :bind (("M-$" . jinx-correct)
+           ("C-M-$" . jinx-languages))
+    :custom
+    ;; Use multiple dictionaries if needed
+    (jinx-languages "en_US")
+    ;; Exclude certain faces from spell checking
+    (jinx-exclude-faces '(line-number font-lock-comment-face))
+    :config
+    ;; Better visual feedback for dyslexic users  
+    (set-face-attribute 'jinx-misspelled nil 
                         :underline '(:color "red" :style wave))
-    (set-face-attribute 'flyspell-duplicate nil 
-                        :underline '(:color "orange" :style wave)))
+    ;; Add programming mode support
+    (add-to-list 'jinx-include-modes 'prog-mode)
+    (add-to-list 'jinx-include-modes 'text-mode))
 
+  ;; Keep flyspell for backward compatibility but prefer jinx
   (use-package flyspell
     :ensure nil
-    :hook ((text-mode . my-flyspell-setup)
-           (prog-mode . my-flyspell-setup)))
-
-  ;; Quick correction keybindings
-  (with-eval-after-load 'flyspell
-    (define-key flyspell-mode-map (kbd "C-c s c") 'flyspell-correct-wrapper)
-    (define-key flyspell-mode-map (kbd "C-c s n") 'flyspell-goto-next-error))
-
-  (defun my-flyspell-toggle ()
-    "Toggle Flyspell on or off."
-    (interactive)
-    (if (symbol-value flyspell-mode)
-        (progn (flyspell-mode -1) (message "Flyspell off"))
-      (my-flyspell-setup)
-      (message "Flyspell on")))
-
+    :defer t
+    :config
+    ;; Disable flyspell if jinx is available
+    (when (featurep 'jinx)
+      (global-flyspell-mode -1)))
 #+END_SRC
 
 ** Tree-sitter
@@ -1043,6 +1049,69 @@ This section is for custom functions and global keybindings that don't belong to
       (error 
        (message "Error with AI documentation: %s" (error-message-string err)))))
 
+  ;; AI-enhanced writing assistance functions
+  (defun my/improve-writing-with-ai ()
+    "Improve selected text for clarity, grammar, and style using AI."
+    (interactive)
+    (condition-case err
+        (if (region-active-p)
+            (gptel-send (concat "Improve this text for clarity, grammar, and style. "
+                               "Keep the meaning and intent intact:\n\n" 
+                               (buffer-substring-no-properties 
+                                (region-beginning) (region-end))))
+          (message "Please select text to improve"))
+      (error 
+       (message "Error with AI writing improvement: %s" (error-message-string err)))))
+
+  (defun my/adjust-tone-with-ai (tone)
+    "Adjust the tone of selected text (professional, casual, academic, friendly)."
+    (interactive "sTone (professional/casual/academic/friendly): ")
+    (condition-case err
+        (if (region-active-p)
+            (gptel-send (concat (format "Rewrite this text in a %s tone while keeping the core message:\n\n" tone)
+                               (buffer-substring-no-properties 
+                                (region-beginning) (region-end))))
+          (message "Please select text to adjust tone"))
+      (error 
+       (message "Error with AI tone adjustment: %s" (error-message-string err)))))
+
+  (defun my/summarize-text-with-ai ()
+    "Summarize selected text using AI."
+    (interactive)
+    (condition-case err
+        (if (region-active-p)
+            (gptel-send (concat "Provide a clear, concise summary of this text:\n\n" 
+                               (buffer-substring-no-properties 
+                                (region-beginning) (region-end))))
+          (message "Please select text to summarize"))
+      (error 
+       (message "Error with AI summarization: %s" (error-message-string err)))))
+
+  (defun my/expand-text-with-ai ()
+    "Expand selected text with more detail using AI."
+    (interactive)
+    (condition-case err
+        (if (region-active-p)
+            (gptel-send (concat "Expand this text with more detail and examples while maintaining clarity:\n\n" 
+                               (buffer-substring-no-properties 
+                                (region-beginning) (region-end))))
+          (message "Please select text to expand"))
+      (error 
+       (message "Error with AI text expansion: %s" (error-message-string err)))))
+
+  (defun my/proofread-with-ai ()
+    "Proofread selected text for grammar, spelling, and style issues using AI."
+    (interactive)
+    (condition-case err
+        (if (region-active-p)
+            (gptel-send (concat "Proofread this text for grammar, spelling, punctuation, and style issues. "
+                               "Provide specific corrections and explanations:\n\n" 
+                               (buffer-substring-no-properties 
+                                (region-beginning) (region-end))))
+          (message "Please select text to proofread"))
+      (error 
+       (message "Error with AI proofreading: %s" (error-message-string err)))))
+
   ;; Bury the current buffer instead of killing it.
   (global-set-key (kbd "C-c k") #'bury-buffer)
 
@@ -1074,19 +1143,26 @@ This section is for custom functions and global keybindings that don't belong to
   ;; Keybinding for the restart command.
   (global-set-key (kbd "C-c x r") #'restart-emacs)
 
-  ;; AI-enhanced development keybindings (using C-c g prefix to avoid conflict with claude-code)
+  ;; AI-enhanced development keybindings (C-c g prefix for all AI functions)
   (global-set-key (kbd "C-c g e") #'my/explain-code-with-ai)
   (global-set-key (kbd "C-c g r") #'my/review-code-with-ai)
   (global-set-key (kbd "C-c g d") #'my/document-code-with-ai)
+
+  ;; AI-enhanced writing keybindings (C-c g prefix)
+  (global-set-key (kbd "C-c g i") #'my/improve-writing-with-ai)     ; Improve text
+  (global-set-key (kbd "C-c g t") #'my/adjust-tone-with-ai)        ; Adjust tone
+  (global-set-key (kbd "C-c g s") #'my/summarize-text-with-ai)     ; Summarize
+  (global-set-key (kbd "C-c g x") #'my/expand-text-with-ai)        ; Expand text
+  (global-set-key (kbd "C-c g p") #'my/proofread-with-ai)          ; Proofread
 
   ;; Writing assistance and accessibility keybindings
   (global-set-key (kbd "C-c o") #'olivetti-mode)          ; Focus mode
   (global-set-key (kbd "C-c W") #'writegood-mode)         ; Toggle writing analysis
 
   ;; Spell checking keybindings (C-c s prefix)  
-  (global-set-key (kbd "C-c s c") #'flyspell-correct-wrapper) ; Quick spell correction
-  (global-set-key (kbd "C-c s n") #'flyspell-goto-next-error) ; Next spelling error
-  (global-set-key (kbd "C-c s t") #'my-flyspell-toggle)       ; Toggle flyspell
+  (global-set-key (kbd "C-c s c") #'jinx-correct)           ; Quick spell correction
+  (global-set-key (kbd "C-c s n") #'jinx-next)              ; Next spelling error
+  (global-set-key (kbd "C-c s l") #'jinx-languages)         ; Change languages
 
   ;; Codespell keybindings (C-c s prefix)
   (global-set-key (kbd "C-c s b") #'my-codespell-buffer)   ; Check buffer
