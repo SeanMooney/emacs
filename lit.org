@@ -57,7 +57,7 @@ This block bootstraps `straight.el` if it's not already installed.
   (custom-set-variables
    '(straight-recipe-overrides '((nil
                                 (nongnu-elpa :type git
-                                             :repo "[https://github.com/emacsmirror/nongnu_elpa](https://github.com/emacsmirror/nongnu_elpa)"
+                                             :repo "https://github.com/emacsmirror/nongnu_elpa"
                                              :depth (full single-branch)
                                              :local-repo "nongnu-elpa"
                                              :build nil)))))
