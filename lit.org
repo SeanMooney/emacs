@@ -231,6 +231,13 @@ These settings improve the core text editing experience.
     :config
     ;; Don't warn about commands that haven't been used with multiple cursors
     (setq mc/always-run-for-all t))
+
+  ;; Ensure font-lock-mode is enabled for syntax highlighting
+  (use-package emacs
+    :ensure nil
+    :config
+    (global-font-lock-mode 1)
+    (setq font-lock-maximum-decoration t))
 #+END_SRC
 
 ** File Handling & Saving
@@ -757,7 +764,10 @@ These are language-agnostic tools that form the foundation of the IDE experience
 
     ;; `eglot` is a minimal, built-in LSP client.
     (use-package eglot
-      :hook ((prog-mode . eglot-ensure))
+      :hook ((python-mode . eglot-ensure)
+             (python-ts-mode . eglot-ensure)
+             (js-mode . eglot-ensure)
+             (typescript-mode . eglot-ensure))
       :bind (("C-c l c" . eglot-reconnect)
              ("C-c l d" . flymake-show-buffer-diagnostics)
              ("C-c l f f" . eglot-format)
@@ -786,32 +796,26 @@ These are language-agnostic tools that form the foundation of the IDE experience
       (compilation-skip-threshold 2)) ; Skip warnings
 #+END_SRC
 
-** Enhanced Spell Checking (Jinx)
-Modern, fast spell checker that replaces flyspell with better performance and accuracy.
+** Spell Checking (Flyspell)
+Traditional spell checker that's reliable and doesn't interfere with syntax highlighting.
 
 #+BEGIN_SRC emacs-lisp
-  ;; Jinx - Modern spell checker (replaces flyspell)
-  (use-package jinx
-    :hook (emacs-startup . global-jinx-mode)
-    :bind (("M-$" . jinx-correct)
-           ("C-M-$" . jinx-languages))
-    :custom
-    ;; Use multiple dictionaries if needed
-    (jinx-languages "en_US")
-    ;; Exclude certain faces from spell checking
-    (jinx-exclude-faces '(line-number font-lock-comment-face))
-    :config
-    ;; Better visual feedback for dyslexic users
-    (set-face-attribute 'jinx-misspelled nil :underline '(:color "red" :style wave)))
-
-  ;; Keep flyspell for backward compatibility but prefer jinx
+  ;; Flyspell for spell checking
   (use-package flyspell
     :ensure nil
-    :defer t
+    :hook ((text-mode . flyspell-mode)
+           (org-mode . flyspell-mode)
+           (markdown-mode . flyspell-mode)
+           (prog-mode . flyspell-prog-mode))  ; Only check comments/strings in code
+    :bind (("M-$" . flyspell-correct-word-before-point)
+           ("C-M-$" . ispell-change-dictionary))
+    :custom
+    (flyspell-issue-message-flag nil)  ; Don't show messages for every word
+    (flyspell-issue-welcome-flag nil)  ; Don't show welcome message
     :config
-    ;; Disable flyspell if jinx is available
-    (when (featurep 'jinx)
-      (global-flyspell-mode -1)))
+    ;; Better visual feedback
+    (set-face-attribute 'flyspell-incorrect nil :underline '(:color "red" :style wave))
+    (set-face-attribute 'flyspell-duplicate nil :underline '(:color "orange" :style wave)))
 #+END_SRC
 
 ** Tree-sitter
@@ -822,7 +826,8 @@ Tree-sitter provides faster and more accurate syntax parsing, which improves hig
     :custom
     (treesit-auto-install 'prompt)
     :config
-    (treesit-auto-add-to-auto-mode-alist 'all)
+    ;; Only add tree-sitter modes for languages that benefit from it
+    (treesit-auto-add-to-auto-mode-alist '(python bash javascript typescript json yaml))
     (global-treesit-auto-mode))
 #+END_SRC
 
@@ -845,9 +850,14 @@ This section configures the Python development environment, including virtual en
 
   (use-package python
     :ensure nil
+    :hook (python-mode . (lambda ()
+                          (setq-local tab-width 4)
+                          (setq-local python-indent-offset 4)))
     :custom
     ;; Use the fast and powerful `ruff` linter for checking Python code.
-    (python-check-command "ruff check --ignore-noqa"))
+    (python-check-command "ruff check --ignore-noqa")
+    ;; Ensure syntax highlighting works properly
+    (python-font-lock-keywords-level 2))
 #+END_SRC
 
 ** Language: Markdown
