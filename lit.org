@@ -802,11 +802,7 @@ Modern, fast spell checker that replaces flyspell with better performance and ac
     (jinx-exclude-faces '(line-number font-lock-comment-face))
     :config
     ;; Better visual feedback for dyslexic users  
-    (set-face-attribute 'jinx-misspelled nil 
-                        :underline '(:color "red" :style wave))
-    ;; Add programming mode support
-    (add-to-list 'jinx-include-modes 'prog-mode)
-    (add-to-list 'jinx-include-modes 'text-mode))
+    (set-face-attribute 'jinx-misspelled nil :underline '(:color "red" :style wave)))
 
   ;; Keep flyspell for backward compatibility but prefer jinx
   (use-package flyspell
@@ -988,7 +984,7 @@ model with relevant information about the project you're working on.
                             (condition-case err
                                 (mcp-hub-start-all-server)
                               (error 
-                               (message "MCP servers failed to start: %s" (error-message-string err)))))))))
+                               (message "MCP servers failed to start: %s" (error-message-string err))))))))
 #+END_SRC
 
 ** claude-code
