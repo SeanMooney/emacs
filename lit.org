@@ -107,7 +107,7 @@ This configures Org mode basics, especially the function to automatically tangle
           ;; Dynamic scoping to the rescue
           (let ((org-confirm-babel-evaluate nil))
             (org-babel-tangle)))
-      (error 
+      (error
        (message "Error tangling config: %s" (error-message-string err)))))
 
   (add-hook 'org-mode-hook
@@ -225,7 +225,7 @@ These settings improve the core text editing experience.
   (use-package multiple-cursors
     :bind (("C-S-c C-S-c" . mc/edit-lines)                    ; Add cursor to each line in region
            ("C->" . mc/mark-next-like-this)                   ; Mark next occurrence
-           ("C-<" . mc/mark-previous-like-this)               ; Mark previous occurrence  
+           ("C-<" . mc/mark-previous-like-this)               ; Mark previous occurrence
            ("C-c C-<" . mc/mark-all-like-this)                ; Mark all occurrences
            ("C-S-<mouse-1>" . mc/add-cursor-on-click))        ; Add cursor with mouse
     :config
@@ -268,7 +268,7 @@ This configures how Emacs handles files, symlinks, and saving state.
     (auto-revert-verbose t)                    ; Show messages when reverting
     (global-auto-revert-non-file-buffers t)   ; Also revert non-file buffers like Dired
     (auto-revert-avoid-polling nil)            ; Use file notifications when available
-    :config 
+    :config
     (global-auto-revert-mode 1))
 #+END_SRC
 
@@ -801,7 +801,7 @@ Modern, fast spell checker that replaces flyspell with better performance and ac
     ;; Exclude certain faces from spell checking
     (jinx-exclude-faces '(line-number font-lock-comment-face))
     :config
-    ;; Better visual feedback for dyslexic users  
+    ;; Better visual feedback for dyslexic users
     (set-face-attribute 'jinx-misspelled nil :underline '(:color "red" :style wave)))
 
   ;; Keep flyspell for backward compatibility but prefer jinx
@@ -942,7 +942,7 @@ Configuration for `gptel`, a client for interacting with Large Language Models.
       "Check if gptel backend is available and provide feedback."
       (condition-case err
           (gptel--model-capable-p 'stream)
-        (error 
+        (error
          (message "GPTel backend unavailable: %s" (error-message-string err))
          nil)))
     (add-hook 'gptel-pre-request-hook #'my/gptel-check-backend))
@@ -966,9 +966,9 @@ model with relevant information about the project you're working on.
        ;; This server exposes the root directory of your current project to the LLM.
        ;; Only enabled if npx is available.
        ,@(when (executable-find "npx")
-           `(("filesystem" . (:command "npx" 
+           `(("filesystem" . (:command "npx"
                              :args ("-y" "@modelcontextprotocol/server-filesystem"
-                                    ,(or (ignore-errors (project-root (project-current))) 
+                                    ,(or (ignore-errors (project-root (project-current)))
                                          default-directory))))))
 
        ;; 2. A Fetch Server (with error checking)
@@ -979,11 +979,11 @@ model with relevant information about the project you're working on.
     :config
     ;; Load the hub functionality and tell gptel to use MCP as a context provider.
     (require 'mcp-hub)
-    :hook (after-init . (lambda () 
+    :hook (after-init . (lambda ()
                           (when mcp-hub-servers
                             (condition-case err
                                 (mcp-hub-start-all-server)
-                              (error 
+                              (error
                                (message "MCP servers failed to start: %s" (error-message-string err))))))))
 #+END_SRC
 
@@ -1014,11 +1014,11 @@ This section is for custom functions and global keybindings that don't belong to
     (interactive)
     (condition-case err
         (if (region-active-p)
-            (gptel-send (concat "Explain this code:\n\n" 
-                               (buffer-substring-no-properties 
+            (gptel-send (concat "Explain this code:\n\n"
+                               (buffer-substring-no-properties
                                 (region-beginning) (region-end))))
           (message "Please select code to explain"))
-      (error 
+      (error
        (message "Error with AI explain: %s" (error-message-string err)))))
 
   (defun my/review-code-with-ai ()
@@ -1026,11 +1026,11 @@ This section is for custom functions and global keybindings that don't belong to
     (interactive)
     (condition-case err
         (if (region-active-p)
-            (gptel-send (concat "Review this code for best practices and suggest improvements:\n\n" 
-                               (buffer-substring-no-properties 
+            (gptel-send (concat "Review this code for best practices and suggest improvements:\n\n"
+                               (buffer-substring-no-properties
                                 (region-beginning) (region-end))))
           (message "Please select code to review"))
-      (error 
+      (error
        (message "Error with AI review: %s" (error-message-string err)))))
 
   (defun my/document-code-with-ai ()
@@ -1038,11 +1038,11 @@ This section is for custom functions and global keybindings that don't belong to
     (interactive)
     (condition-case err
         (if (region-active-p)
-            (gptel-send (concat "Generate documentation for this code:\n\n" 
-                               (buffer-substring-no-properties 
+            (gptel-send (concat "Generate documentation for this code:\n\n"
+                               (buffer-substring-no-properties
                                 (region-beginning) (region-end))))
           (message "Please select code to document"))
-      (error 
+      (error
        (message "Error with AI documentation: %s" (error-message-string err)))))
 
   ;; AI-enhanced writing assistance functions
@@ -1052,11 +1052,11 @@ This section is for custom functions and global keybindings that don't belong to
     (condition-case err
         (if (region-active-p)
             (gptel-send (concat "Improve this text for clarity, grammar, and style. "
-                               "Keep the meaning and intent intact:\n\n" 
-                               (buffer-substring-no-properties 
+                               "Keep the meaning and intent intact:\n\n"
+                               (buffer-substring-no-properties
                                 (region-beginning) (region-end))))
           (message "Please select text to improve"))
-      (error 
+      (error
        (message "Error with AI writing improvement: %s" (error-message-string err)))))
 
   (defun my/adjust-tone-with-ai (tone)
@@ -1065,10 +1065,10 @@ This section is for custom functions and global keybindings that don't belong to
     (condition-case err
         (if (region-active-p)
             (gptel-send (concat (format "Rewrite this text in a %s tone while keeping the core message:\n\n" tone)
-                               (buffer-substring-no-properties 
+                               (buffer-substring-no-properties
                                 (region-beginning) (region-end))))
           (message "Please select text to adjust tone"))
-      (error 
+      (error
        (message "Error with AI tone adjustment: %s" (error-message-string err)))))
 
   (defun my/summarize-text-with-ai ()
@@ -1076,11 +1076,11 @@ This section is for custom functions and global keybindings that don't belong to
     (interactive)
     (condition-case err
         (if (region-active-p)
-            (gptel-send (concat "Provide a clear, concise summary of this text:\n\n" 
-                               (buffer-substring-no-properties 
+            (gptel-send (concat "Provide a clear, concise summary of this text:\n\n"
+                               (buffer-substring-no-properties
                                 (region-beginning) (region-end))))
           (message "Please select text to summarize"))
-      (error 
+      (error
        (message "Error with AI summarization: %s" (error-message-string err)))))
 
   (defun my/expand-text-with-ai ()
@@ -1088,11 +1088,11 @@ This section is for custom functions and global keybindings that don't belong to
     (interactive)
     (condition-case err
         (if (region-active-p)
-            (gptel-send (concat "Expand this text with more detail and examples while maintaining clarity:\n\n" 
-                               (buffer-substring-no-properties 
+            (gptel-send (concat "Expand this text with more detail and examples while maintaining clarity:\n\n"
+                               (buffer-substring-no-properties
                                 (region-beginning) (region-end))))
           (message "Please select text to expand"))
-      (error 
+      (error
        (message "Error with AI text expansion: %s" (error-message-string err)))))
 
   (defun my/proofread-with-ai ()
@@ -1101,11 +1101,11 @@ This section is for custom functions and global keybindings that don't belong to
     (condition-case err
         (if (region-active-p)
             (gptel-send (concat "Proofread this text for grammar, spelling, punctuation, and style issues. "
-                               "Provide specific corrections and explanations:\n\n" 
-                               (buffer-substring-no-properties 
+                               "Provide specific corrections and explanations:\n\n"
+                               (buffer-substring-no-properties
                                 (region-beginning) (region-end))))
           (message "Please select text to proofread"))
-      (error 
+      (error
        (message "Error with AI proofreading: %s" (error-message-string err)))))
 
   ;; Bury the current buffer instead of killing it.
@@ -1128,7 +1128,7 @@ This section is for custom functions and global keybindings that don't belong to
           ;; If no region, comment/uncomment current line without moving cursor
           (save-excursion
             (comment-line 1)))
-      (error 
+      (error
        (message "Error commenting: %s" (error-message-string err)))))
 
   ;; Toggle comment/uncomment for region or line
@@ -1155,7 +1155,7 @@ This section is for custom functions and global keybindings that don't belong to
   (global-set-key (kbd "C-c o") #'olivetti-mode)          ; Focus mode
   (global-set-key (kbd "C-c W") #'writegood-mode)         ; Toggle writing analysis
 
-  ;; Spell checking keybindings (C-c s prefix)  
+  ;; Spell checking keybindings (C-c s prefix)
   (global-set-key (kbd "C-c s c") #'jinx-correct)           ; Quick spell correction
   (global-set-key (kbd "C-c s n") #'jinx-next)              ; Next spelling error
   (global-set-key (kbd "C-c s l") #'jinx-languages)         ; Change languages

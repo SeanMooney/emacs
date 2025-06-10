@@ -53,7 +53,7 @@ This isn't vanilla Emacs. Here are the key differences you'll notice immediately
 
 ### 🧠 **AI-Powered Everything**
 - **5 AI writing functions** for improving, summarizing, and proofreading text
-- **3 AI development functions** for code explanation, review, and documentation  
+- **3 AI development functions** for code explanation, review, and documentation
 - **Local AI integration** with your Ollama instance
 - **Smart context awareness** through Model Context Protocol (MCP)
 
@@ -157,7 +157,7 @@ Your configuration includes powerful AI features that work with your local Ollam
 
 #### **Writing AI Functions** (`C-c g` prefix)
 - **`C-c g i`** - **Improve**: "Make this clearer and fix grammar"
-- **`C-c g t`** - **Tone**: "Rewrite this professionally/casually/academically"  
+- **`C-c g t`** - **Tone**: "Rewrite this professionally/casually/academically"
 - **`C-c g s`** - **Summarize**: "Give me the key points"
 - **`C-c g p`** - **Proofread**: "Check everything - grammar, style, clarity"
 - **`C-c g x`** - **Expand**: "Add more detail and examples"
@@ -205,7 +205,7 @@ C-c f - Switch font presets (Fontaine)
 **Development AI:**
 ```
 C-c g e - Explain code with AI
-C-c g r - Review code with AI  
+C-c g r - Review code with AI
 C-c g d - Document code with AI
 ```
 
@@ -337,7 +337,7 @@ M-0             - Select treemacs window
 #### **Smart Search & Navigation (Consult Integration)**
 ```
 M-s c - Consult locate
-M-s e - Explore isearch history  
+M-s e - Explore isearch history
 M-s g - Grep with consult
 M-s G - Git grep with consult
 M-s r - Ripgrep with consult
@@ -364,7 +364,7 @@ C-S-z - Redo (undo-tree)
 ### **Core Navigation (Replaces Some Emacs Defaults)**
 ```
 C-f - Consult line search (was forward-char)
-C-j - Consult imenu (was newline-and-indent)  
+C-j - Consult imenu (was newline-and-indent)
 C-/ - Smart comment toggle (was undo)
 ```
 
@@ -395,7 +395,7 @@ C-h x - Helpful command (enhanced command help)
 
 ### **4. Contextual Grouping**
 - **AI functions**: All under `C-c g` prefix
-- **Spell checking**: All under `C-c s` prefix  
+- **Spell checking**: All under `C-c s` prefix
 - **Terminals**: All under `C-c t` prefix
 - **Project operations**: All under `C-x p` prefix
 
@@ -486,7 +486,7 @@ This configuration is built on carefully selected packages that work together se
 #### **Consult** - Enhanced Commands
 - **What it does**: Supercharged versions of built-in Emacs commands
 - **Why it's better**: Live previews, better search, project integration
-- **How to use**: 
+- **How to use**:
   - `C-f` → Search with live preview
   - `C-x b` → Buffer switching with previews
   - `C-j` → Symbol navigation with context
@@ -530,7 +530,7 @@ This configuration is built on carefully selected packages that work together se
 #### **Jinx** - Modern Spell Checker
 - **What it does**: Fast, accurate spell checking using enchant backend
 - **Why it's better**: Faster than flyspell, better language support, async
-- **How to use**: 
+- **How to use**:
   - `M-$` → Quick correction
   - `C-c s c` → Correct spelling
   - `C-c s l` → Switch languages
@@ -591,7 +591,7 @@ This configuration is built on carefully selected packages that work together se
 #### **dired-x** - Enhanced File Manager
 - **What it does**: Extended functionality for Emacs built-in file manager
 - **Why it's better**: Omit mode, smart commands, better file operations
-- **How to use**: 
+- **How to use**:
   - `C-x C-j` → Jump to current file in dired
   - `C-x M-o` → Toggle omit mode (hide dotfiles)
 - **Key features**: File omitting, command guessing, virtual dired
@@ -605,7 +605,7 @@ This configuration is built on carefully selected packages that work together se
 #### **ranger** - Three-Pane File Browser
 - **What it does**: File browser with parent/current/preview panes
 - **Why it's better**: Visual file browsing, instant previews
-- **How to use**: 
+- **How to use**:
   - `C-x r d` → Full ranger mode
   - `C-x r j` → Minimal deer mode
 - **Key features**: File previews, three-pane layout, vim-like navigation
@@ -661,7 +661,7 @@ This configuration is built on carefully selected packages that work together se
 #### **multiple-cursors** - Multi-Point Editing
 - **What it does**: Edit multiple locations simultaneously
 - **Why it's better**: Powerful bulk editing, better than search/replace
-- **How to use**: 
+- **How to use**:
   - `C->` → Mark next occurrence
   - `C-S-c C-S-c` → Edit lines
   - `C-c C-<` → Mark all occurrences
@@ -757,7 +757,7 @@ All custom keybindings use consistent prefixes:
 
 ### Starting a Project
 1. **Navigate to project**: `C-x p p` (project switch)
-2. **Find files quickly**: `C-x p f` (project find file)  
+2. **Find files quickly**: `C-x p f` (project find file)
 3. **Search across project**: `M-s r` (ripgrep search)
 4. **Open project terminal**: `C-c t p`
 
@@ -771,6 +771,19 @@ All custom keybindings use consistent prefixes:
 - **Git status**: `C-x g` (opens Magit)
 - **See changes visually** - diff indicators appear in the fringe
 - **Stage and commit** through Magit interface
+
+### Configuration Validation (Optional but Recommended)
+To prevent Emacs configuration syntax errors:
+
+```bash
+# One-time setup
+python3 -m venv .venv
+source .venv/bin/activate
+pip install pre-commit
+pre-commit install
+```
+
+This automatically validates your configuration before commits, preventing syntax errors that could break Emacs startup.
 
 ### Writing Workflow Reference
 
@@ -895,7 +908,7 @@ The following sections contain comprehensive reference material. Use them as nee
 
 ### Explore Advanced Features
 - **MCP integration** for project-aware AI assistance
-- **Tree-sitter** for better syntax highlighting  
+- **Tree-sitter** for better syntax highlighting
 - **Advanced project management** with project.el
 - **Terminal integration** with eat
 

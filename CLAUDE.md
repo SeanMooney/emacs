@@ -28,6 +28,13 @@ This is a personal Emacs configuration using a **literate programming** approach
 - For major changes, restart Emacs with `C-c x r`
 - Check startup time in `*Messages*` buffer (shows performance metrics)
 
+### Pre-commit Configuration Validation
+- Pre-commit hooks automatically validate configuration syntax before commits
+- Setup: `source .venv/bin/activate && pre-commit install`
+- Manual validation: `source .venv/bin/activate && pre-commit run --all-files`
+- The validation hook prevents syntax errors that could break Emacs startup
+- Hook checks: org-mode tangling, Emacs configuration loading, and basic file formatting
+
 ## Key Configuration Sections
 
 ### Core Setup (Early Init)

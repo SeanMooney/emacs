@@ -19,3 +19,4 @@ auto-save-list
 lit.el
 undo
 *~
+.venv/

@@ -1,0 +1,19 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: validate-emacs-config
+        name: Validate Emacs Configuration
+        entry: ./.pre-commit-scripts/validate-emacs-config.sh
+        language: script
+        files: ^lit\.org$
+        description: "Validates that the Emacs configuration can load without syntax errors"
+        pass_filenames: false
