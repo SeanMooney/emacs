@@ -82,12 +82,25 @@ All package configuration follows this pattern in `lit.org`:
 
 ## Development Notes
 
+### Documentation Consistency
+- **CRITICAL**: Always check that `Getting-Started.md` is updated to be consistent with `lit.org` before committing
+- The documentation must reflect the actual configuration:
+  - Package additions/removals
+  - Key binding changes
+  - Feature descriptions
+  - Dependencies and requirements
+- Both files serve different but related purposes:
+  - `lit.org`: The actual configuration code
+  - `Getting-Started.md`: User-facing documentation
+
 ### When Adding New Packages
 1. Add `use-package` declaration to appropriate section in `lit.org`
-2. Save to auto-tangle
-3. Run `M-x straight-use-package` if needed
-4. Test configuration
-5. Restart Emacs if needed
+2. Update corresponding documentation in `Getting-Started.md`
+3. Save to auto-tangle
+4. Run `M-x straight-use-package` if needed
+5. Test configuration
+6. Restart Emacs if needed
+7. Verify documentation consistency before committing
 
 ### Performance Considerations
 - Native compilation is enabled (cache in `eln-cache/`)
