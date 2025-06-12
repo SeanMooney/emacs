@@ -1002,20 +1002,22 @@ model with relevant information about the project you're working on.
 #+begin_src emacs-lisp
   (use-package claude-code
     :straight (:type git :host github :repo "stevemolitor/claude-code.el" :branch "main"
-               :files ("*.el" (:exclude "demo.gif")))
+	       :files ("*.el" (:exclude "demo.gif")))
     :bind-keymap
     ("C-c a" . claude-code-command-map)  ; Choose your preferred prefix
     :custom
-    ;; Configure to use local claude installation
-    (claude-code-program "/home/smooney/.claude/local/claude")
+    ;; Configure to use claude installation from PATH
+    (claude-code-program (or (executable-find "claude") 
+			     (executable-find "claude-code")
+			     "claude"))
     :config
     (claude-code-mode)
     ;; Configure for your wide screen setup
     (add-to-list 'display-buffer-alist
-                 '("^\\*claude\\*"
-                   (display-buffer-in-side-window)
-                   (side . right)
-                   (window-width . 0.33))))
+		 '("^\\*claude\\*"
+		   (display-buffer-in-side-window)
+		   (side . right)
+		   (window-width . 0.33))))
 #+end_src
 * Custom Commands & Bindings
 This section is for custom functions and global keybindings that don't belong to a specific package.
