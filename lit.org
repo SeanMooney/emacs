@@ -140,7 +140,10 @@ This section configures the fundamental, non-UI behavior of Emacs, from user inf
     (create-lockfiles nil)
     ;; Disable backup files
     (make-backup-files nil)
-    (backup-inhibited t))
+    (backup-inhibited t)
+    ;; Disable auto-save files (#filename#)
+    (auto-save-default nil)
+    (auto-save-mode nil))
 #+END_SRC
 
 ** Editing Enhancements
