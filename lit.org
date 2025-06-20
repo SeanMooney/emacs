@@ -946,7 +946,10 @@ Configuration for `gptel`, a client for interacting with Large Language Models.
       (setq gptel-backend (gptel-make-ollama "Ollama"
                             :host ollama-host
                             :stream t
-                            :models '("hf.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:UD-Q4_K_XL"
+                            :models '(
+  				   "hf.co/unsloth/gemma-3-4b-it-qat-GGUF:UD-Q8_K_XL"
+  				   "hf.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:UD-Q4_K_XL"
+  				   "hf.co/unsloth/Magistral-Small-2506-GGUF:Q3_K_XL"
                                      "omaciel/ticketeer-granite3.3"
                                      "hf.co/unsloth/GLM-Z1-9B-0414-GGUF:Q5_K_XL"))))
     ;; Add error handling for unavailable backends
@@ -1010,7 +1013,7 @@ model with relevant information about the project you're working on.
     ("C-c a" . claude-code-command-map)  ; Choose your preferred prefix
     :custom
     ;; Configure to use claude installation from PATH
-    (claude-code-program (or (executable-find "claude") 
+    (claude-code-program (or (executable-find "claude")
 			     (executable-find "claude-code")
 			     "claude"))
     :config
