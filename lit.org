@@ -1034,7 +1034,7 @@ model with relevant information about the project you're working on.
     (claude-code-mode)
     ;; Configure for your wide screen setup
     (add-to-list 'display-buffer-alist
-		 '("^\\*claude\\*"
+		 '("^\\*claude"
 		   (display-buffer-in-side-window)
 		   (side . right)
 		   (window-width . 0.33))))
