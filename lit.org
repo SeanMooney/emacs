@@ -569,9 +569,9 @@ Configuration for Dired, Emacs's built-in file manager.
     :straight (:type built-in)
     :after dired
     :bind (("C-x C-j" . dired-jump))         ; Jump to dired of current file
-    :hook (dired-mode . dired-omit-mode)     ; Enable omit mode by default
     :custom
-    (dired-omit-files "^\\.[^.]\\|^\\.\\.$\\|\\.DS_Store$\\|\\.localized$")
+    ;; Only omit system/backup files, not regular dot files
+    (dired-omit-files "^\\.\\.$\\|\\.DS_Store$\\|\\.localized$\\|~$\\|#.*#$")
     (dired-guess-shell-gnutar "tar"))
 
   ;; Recent directories for quick access
@@ -593,6 +593,11 @@ Configuration for Dired, Emacs's built-in file manager.
     :config
     ;; Don't show hidden files by default (toggle with zh)
     (setq ranger-show-hidden nil))
+
+  ;; Modern icons for dired
+  (use-package nerd-icons-dired
+    :after (dired nerd-icons)
+    :hook (dired-mode . nerd-icons-dired-mode))
 #+END_SRC
 
 ** Ibuffer (Buffer Manager)
@@ -656,7 +661,7 @@ Additional UI packages that help with discoverability and navigation.
   ;; `treemacs` provides a file tree sidebar.
   (use-package treemacs
     :defer t
-    :bind (("M-0"       . treemacs-select-window)
+    :bind (("C-x t w"   . treemacs-select-window)
            ("C-x t 1"   . treemacs-delete-other-windows)
            ("C-x t t"   . treemacs)
            ("C-x t d"   . treemacs-select-directory))
@@ -674,7 +679,50 @@ Additional UI packages that help with discoverability and navigation.
           treemacs-width 35)
     (treemacs-follow-mode t)
     (treemacs-filewatch-mode t)
-    (treemacs-fringe-indicator-mode 'always))
+    (treemacs-fringe-indicator-mode 'always)
+    ;; Enable automatic project following
+    (treemacs-project-follow-mode t))
+
+  ;; Custom integration with project.el for single-project display
+  (defun my/treemacs-display-current-project-exclusively ()
+    "Display only the current project in treemacs, removing all others."
+    (when-let* ((project (project-current))
+                (project-root (project-root project)))
+      (treemacs-block-refresh
+        ;; Remove all projects from workspace
+        (treemacs-remove-project-from-workspace
+         (treemacs-workspace->projects (treemacs-current-workspace)))
+        ;; Add and display only the current project
+        (treemacs-add-and-display-current-project-exclusively))))
+
+  ;; Advice to automatically update treemacs when switching projects
+  (defun my/treemacs-project-switch-advice (&rest _args)
+    "Advice function to update treemacs when switching projects."
+    (when (and (featurep 'treemacs)
+               (treemacs-current-workspace))
+      (run-with-idle-timer 0.1 nil #'my/treemacs-display-current-project-exclusively)))
+
+  ;; Add advice to project-switch-project
+  (with-eval-after-load 'project
+    (advice-add 'project-switch-project :after #'my/treemacs-project-switch-advice))
+
+  ;; Git integration for treemacs
+  (use-package treemacs-magit
+    :after (treemacs magit)
+    :defer t)
+
+  ;; Modern icon support for better readability
+  (use-package nerd-icons
+    :config
+    ;; Run M-x nerd-icons-install-fonts after first install
+    (unless (find-font (font-spec :name "Symbols Nerd Font Mono"))
+      (when (y-or-n-p "Nerd fonts not found. Install them? ")
+        (nerd-icons-install-fonts))))
+
+  (use-package treemacs-nerd-icons
+    :after (treemacs nerd-icons)
+    :config
+    (treemacs-load-theme "nerd-icons"))
 #+END_SRC
 
 * Reading and Writing Support
