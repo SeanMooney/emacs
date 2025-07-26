@@ -44,6 +44,15 @@ to ensure a clean and predictable launch.
   ;; Reduce native compilation noise
   (setq native-comp-async-report-warnings-errors nil
         native-comp-warning-on-missing-source nil)
+
+  ;; Ensure Emacs uses the proper PATH from bash shell
+  (defun update-path-from-bash ()
+    "Update PATH and exec-path from bash shell environment."
+    (let ((path-from-bash (shell-command-to-string "bash -i -c 'echo $PATH'")))
+      (setenv "PATH" (string-trim path-from-bash))
+      (setq exec-path (split-string (getenv "PATH") path-separator))))
+
+  (update-path-from-bash)
 #+END_SRC
 
 ** Package Management (straight.el)
@@ -78,7 +87,6 @@ This block bootstraps `straight.el` if it's not already installed.
     (load bootstrap-file nil 'nomessage))
 
   (straight-use-package 'use-package)
-  (setq straight-use-package-by-default t)
   (setq use-package-always-ensure t)
 
   ;; Diminish hides or shortens minor mode names in the mode line
@@ -626,6 +634,10 @@ Additional UI packages that help with discoverability and navigation.
     ;; Show source code for elisp functions
     (helpful-switch-buffer-function #'helpful-switch-to-buffer))
 
+  ;; Transient menu framework (required for claude-code)
+  (use-package transient
+    :straight t)
+
   ;; Clean up mode line by hiding/shortening minor mode names
   (use-package diminish
     :ensure nil  ; Already installed above
@@ -867,12 +879,14 @@ This section configures the Python development environment, including virtual en
 This section configures the Markdown syntax highlighting.
 
 #+begin_src emacs-lisp
-(use-package markdown-mode
-  :ensure t
-  :mode ("README\\.md\\'" . gfm-mode)
-  :init (setq markdown-command "multimarkdown")
-  :bind (:map markdown-mode-map
-         ("C-c C-e" . markdown-do)))
+  (use-package markdown-mode
+    :ensure t
+    :mode ("README\\.md\\'" . gfm-mode)
+    :init (setq markdown-command "multimarkdown")
+    :bind (:map markdown-mode-map
+           ("C-c C-e" . markdown-do)))
+  (use-package markdown-preview-mode
+    :ensure t)
 #+end_src
 
 ** Project-Specific Environment (direnv)
@@ -1014,8 +1028,8 @@ model with relevant information about the project you're working on.
     :custom
     ;; Configure to use claude installation from PATH
     (claude-code-program (or (executable-find "claude")
-			     (executable-find "claude-code")
-			     "claude"))
+                             (executable-find "claude-code")
+                             "claude"))
     :config
     (claude-code-mode)
     ;; Configure for your wide screen setup
@@ -1185,4 +1199,237 @@ This section is for custom functions and global keybindings that don't belong to
   (global-set-key (kbd "C-c s b") #'my-codespell-buffer)   ; Check buffer
   (global-set-key (kbd "C-c s r") #'my-codespell-region)   ; Check region
   (global-set-key (kbd "C-c s p") #'my-codespell-project)  ; Check project
+#+END_SRC
+
+* Package Management
+This section contains advanced package management functions for straight.el,
+including health checking, version control integration, and a transient menu interface.
+
+** Core Package Operations
+Functions for basic package management operations like freezing versions and updating packages.
+
+#+BEGIN_SRC emacs-lisp
+  ;; Core package management functions
+  (defun my/straight-freeze-versions ()
+    "Freeze current package versions to lock file."
+    (interactive)
+    (condition-case err
+        (progn
+          (message "Freezing package versions...")
+          (straight-freeze-versions)
+          (message "Package versions frozen to straight/versions/default.el"))
+      (error
+       (message "Error freezing packages: %s" (error-message-string err)))))
+
+  (defun my/straight-update-all ()
+    "Update and rebuild all straight packages."
+    (interactive)
+    (condition-case err
+        (progn
+          (message "Pulling all packages...")
+          (straight-pull-all)
+          (message "Rebuilding all packages...")
+          (straight-rebuild-all)
+          (message "All packages updated and rebuilt successfully"))
+      (error
+       (message "Error updating packages: %s" (error-message-string err)))))
+#+END_SRC
+
+** Package Health & Maintenance
+Functions for checking package health, cleaning up build artifacts, and maintaining package repositories.
+
+#+BEGIN_SRC emacs-lisp
+  ;; Package health and maintenance functions
+  (defun my/straight-check-all ()
+    "Check for broken or problematic packages."
+    (interactive)
+    (condition-case err
+        (progn
+          (message "Checking package health...")
+          (let ((issues '()))
+            ;; Check for missing repositories
+            (dolist (package (hash-table-keys straight--recipe-cache))
+              (let ((repo-dir (straight--repos-dir (symbol-name package))))
+                (unless (file-directory-p repo-dir)
+                  (push (format "Missing repository: %s" package) issues))))
+
+            ;; Check for build issues
+            (dolist (package (hash-table-keys straight--recipe-cache))
+              (let ((build-dir (straight--build-dir (symbol-name package))))
+                (when (and (file-directory-p build-dir)
+                          (= 0 (length (directory-files build-dir nil "\\.el\\'"))))
+                  (push (format "Empty build directory: %s" package) issues))))
+
+            (if issues
+                (with-current-buffer (get-buffer-create "*Package Health*")
+                  (erase-buffer)
+                  (insert "Package Health Issues:\n\n")
+                  (dolist (issue issues)
+                    (insert "• " issue "\n"))
+                  (display-buffer (current-buffer))
+                  (message "Found %d package issues - see *Package Health* buffer" (length issues)))
+              (message "All packages appear healthy"))))
+      (error
+       (message "Error checking package health: %s" (error-message-string err)))))
+
+  (defun my/straight-prune-build ()
+    "Clean up unused build artifacts."
+    (interactive)
+    (condition-case err
+        (progn
+          (message "Pruning build artifacts...")
+          (let ((pruned 0))
+            (dolist (build-dir (directory-files (straight--build-dir) t))
+              (when (and (file-directory-p build-dir)
+                        (not (member (file-name-nondirectory build-dir) '("." "..")))
+                        (not (gethash (intern (file-name-nondirectory build-dir))
+                                     straight--recipe-cache)))
+                (delete-directory build-dir t)
+                (setq pruned (1+ pruned))))
+            (message "Pruned %d unused build directories" pruned)))
+      (error
+       (message "Error pruning build artifacts: %s" (error-message-string err)))))
+
+  (defun my/straight-normalize-all ()
+    "Fix repository states by normalizing all packages."
+    (interactive)
+    (condition-case err
+        (when (yes-or-no-p "This will reset all package repositories. Continue? ")
+          (message "Normalizing all package repositories...")
+          (straight-normalize-all)
+          (message "All packages normalized successfully"))
+      (error
+       (message "Error normalizing packages: %s" (error-message-string err)))))
+
+  (defun my/straight-rebuild-package ()
+    "Rebuild a specific package interactively."
+    (interactive)
+    (condition-case err
+        (let* ((packages (hash-table-keys straight--recipe-cache))
+               (package (intern (completing-read "Rebuild package: "
+                                               (mapcar #'symbol-name packages)))))
+          (message "Rebuilding package: %s" package)
+          (straight-rebuild-package package)
+          (message "Package %s rebuilt successfully" package))
+      (error
+       (message "Error rebuilding package: %s" (error-message-string err)))))
+#+END_SRC
+
+** Version Control Integration
+Functions for managing lockfile versions, including backup, restore, commit, and diff operations.
+
+#+BEGIN_SRC emacs-lisp
+  ;; Version control integration functions
+  (defun my/straight-backup-lockfile ()
+    "Create a timestamped backup of the current lockfile."
+    (interactive)
+    (condition-case err
+        (let* ((lockfile (straight--versions-lockfile))
+               (backup-dir (expand-file-name "versions/backups" (straight--dir)))
+               (timestamp (format-time-string "%Y%m%d-%H%M%S"))
+               (backup-file (expand-file-name (format "lockfile-%s.el" timestamp) backup-dir)))
+          (unless (file-directory-p backup-dir)
+            (make-directory backup-dir t))
+          (if (file-exists-p lockfile)
+              (progn
+                (copy-file lockfile backup-file)
+                (message "Lockfile backed up to: %s" backup-file))
+            (message "No lockfile found to backup")))
+      (error
+       (message "Error backing up lockfile: %s" (error-message-string err)))))
+
+  (defun my/straight-restore-lockfile ()
+    "Restore from a previous lockfile backup."
+    (interactive)
+    (condition-case err
+        (let* ((backup-dir (expand-file-name "versions/backups" (straight--dir)))
+               (lockfile (straight--versions-lockfile)))
+          (if (file-directory-p backup-dir)
+              (let* ((backups (directory-files backup-dir nil "lockfile-.*\\.el$"))
+                     (backup (when backups
+                              (completing-read "Restore from backup: " backups))))
+                (when backup
+                  (let ((backup-path (expand-file-name backup backup-dir)))
+                    (when (yes-or-no-p (format "Restore lockfile from %s? This will overwrite current lockfile." backup))
+                      (copy-file backup-path lockfile t)
+                      (message "Lockfile restored from: %s" backup)))))
+            (message "No backup directory found")))
+      (error
+       (message "Error restoring lockfile: %s" (error-message-string err)))))
+
+  (defun my/straight-commit-lockfile ()
+    "Commit lockfile changes with a descriptive message."
+    (interactive)
+    (condition-case err
+        (let* ((lockfile (straight--versions-lockfile))
+               (default-directory user-emacs-directory))
+          (if (and (file-exists-p lockfile)
+                   (vc-backend lockfile))
+              (let ((commit-msg (format "Pin package versions (%s)"
+                                      (format-time-string "%Y-%m-%d %H:%M"))))
+                (vc-checkin (list lockfile) nil commit-msg)
+                (message "Lockfile committed: %s" commit-msg))
+            (message "Lockfile not under version control or doesn't exist")))
+      (error
+       (message "Error committing lockfile: %s" (error-message-string err)))))
+
+  (defun my/straight-diff-lockfile ()
+    "View changes in the lockfile compared to the last commit."
+    (interactive)
+    (condition-case err
+        (let* ((lockfile (straight--versions-lockfile))
+               (default-directory user-emacs-directory))
+          (if (and (file-exists-p lockfile)
+                   (vc-backend lockfile))
+              (vc-diff nil t (list lockfile))
+            (message "Lockfile not under version control or doesn't exist")))
+      (error
+       (message "Error viewing lockfile diff: %s" (error-message-string err)))))
+#+END_SRC
+
+** Transient Menu Interface
+A magit-style transient menu that provides organized access to all package management functions.
+
+#+BEGIN_SRC emacs-lisp
+  ;; Transient menu for package management
+  (defun my/straight-transient ()
+    "Open the package management transient menu."
+    (interactive)
+    (transient-setup 'my/straight-transient))
+
+  (transient-define-prefix my/straight-transient ()
+    "Package management with straight.el"
+    :info-manual "(straight) Top"
+    [["Actions"
+      ("f" "Freeze versions" my/straight-freeze-versions)
+      ("u" "Update all packages" my/straight-update-all)
+      ("r" "Rebuild package" my/straight-rebuild-package)]
+     ["Maintenance"
+      ("c" "Check package health" my/straight-check-all)
+      ("p" "Prune build artifacts" my/straight-prune-build)
+      ("n" "Normalize repositories" my/straight-normalize-all)]
+     ["Version Control"
+      ("b" "Backup lockfile" my/straight-backup-lockfile)
+      ("B" "Restore lockfile" my/straight-restore-lockfile)
+      ("C" "Commit lockfile" my/straight-commit-lockfile)
+      ("d" "Diff lockfile" my/straight-diff-lockfile)]
+     ["Quit"
+      ("q" "Quit" transient-quit-one)]])
+#+END_SRC
+
+** Keybindings
+All package management functions are bound under the `C-c p` prefix for easy access.
+
+#+BEGIN_SRC emacs-lisp
+  ;; Package management keybindings (C-c p prefix)
+  (global-set-key (kbd "C-c p m") #'my/straight-transient)        ; Main transient menu
+  (global-set-key (kbd "C-c p f") #'my/straight-freeze-versions)  ; Freeze versions
+  (global-set-key (kbd "C-c p u") #'my/straight-update-all)       ; Update all packages
+  (global-set-key (kbd "C-c p c") #'my/straight-check-all)        ; Check package health
+  (global-set-key (kbd "C-c p p") #'my/straight-prune-build)      ; Prune build artifacts
+  (global-set-key (kbd "C-c p r") #'my/straight-rebuild-package)  ; Rebuild package
+  (global-set-key (kbd "C-c p b") #'my/straight-backup-lockfile)  ; Backup lockfile
+  (global-set-key (kbd "C-c p R") #'my/straight-restore-lockfile) ; Restore lockfile
+  (global-set-key (kbd "C-c p C") #'my/straight-commit-lockfile)  ; Commit lockfile
+  (global-set-key (kbd "C-c p d") #'my/straight-diff-lockfile)    ; Diff lockfile
 #+END_SRC
