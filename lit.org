@@ -830,7 +830,8 @@ These are language-agnostic tools that form the foundation of the IDE experience
       :hook ((python-mode . eglot-ensure)
              (python-ts-mode . eglot-ensure)
              (js-mode . eglot-ensure)
-             (typescript-mode . eglot-ensure))
+             (typescript-mode . eglot-ensure)
+             (zig-mode . eglot-ensure))
       :bind (("C-c l c" . eglot-reconnect)
              ("C-c l d" . flymake-show-buffer-diagnostics)
              ("C-c l f f" . eglot-format)
@@ -890,7 +891,7 @@ Tree-sitter provides faster and more accurate syntax parsing, which improves hig
     (treesit-auto-install 'prompt)
     :config
     ;; Only add tree-sitter modes for languages that benefit from it
-    (treesit-auto-add-to-auto-mode-alist '(python bash javascript typescript json yaml))
+    (treesit-auto-add-to-auto-mode-alist '(python bash javascript typescript json yaml zig))
     (global-treesit-auto-mode))
 #+END_SRC
 
@@ -936,6 +937,16 @@ This section configures the Markdown syntax highlighting.
   (use-package markdown-preview-mode
     :ensure t)
 #+end_src
+
+** Language: Zig
+This section configures Zig development support with syntax highlighting, LSP integration, and Tree-sitter parsing.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package zig-mode
+    :hook (zig-mode . (lambda ()
+                       (setq-local tab-width 4)
+                       (setq-local indent-tabs-mode nil))))
+#+END_SRC
 
 ** Project-Specific Environment (direnv)
 `direnv` is a tool that loads and unloads environment variables depending on the current directory. This package integrates it with Emacs.
