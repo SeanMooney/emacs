@@ -12,10 +12,12 @@
                      gcs-done)))
 
 ;; Silence compiler warnings as they can be pretty disruptive
-(setq native-comp-async-report-warnings-errors nil)
+(when (boundp 'native-comp-async-report-warnings-errors)
+  (setq native-comp-async-report-warnings-errors nil))
 
 ;; Set the right directory to store the native comp cache
-(add-to-list 'native-comp-eln-load-path (expand-file-name "eln-cache/" user-emacs-directory))
+(when (boundp 'native-comp-eln-load-path)
+  (add-to-list 'native-comp-eln-load-path (expand-file-name "eln-cache/" user-emacs-directory)))
 
 
 ;; load org package and our lit.org file
