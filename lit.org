@@ -277,6 +277,14 @@ This configures how Emacs handles files, symlinks, and saving state.
     :hook (after-init . savehist-mode)
     :custom (history-length 300))
 
+  ;; Remember recently opened files.
+  (use-package recentf
+    :ensure nil
+    :hook (after-init . recentf-mode)
+    :custom
+    (recentf-max-saved-items 100)
+    (recentf-exclude '("/tmp/" "/ssh:" "/sudo:" "\\.git/")))
+
   ;; Automatically revert file buffers when they change on disk.
   (use-package autorevert
     :ensure nil
@@ -1025,6 +1033,28 @@ Custom helper functions provide integrated workflows leveraging treemacs, eat, m
         (treemacs-select-window)
       (treemacs)))
 
+  (defun my/project-ranger ()
+    "Open ranger in current project root."
+    (interactive)
+    (let ((project-root (project-root (project-current))))
+      (ranger project-root)))
+
+  (defun my/project-recent-files ()
+    "Show recent files in current project using consult."
+    (interactive)
+    (unless (bound-and-true-p recentf-mode)
+      (recentf-mode 1))
+    (let* ((project-root (project-root (project-current)))
+           (project-files (when (and project-root
+                                    (bound-and-true-p recentf-list))
+                           (seq-filter
+                            (lambda (file)
+                              (string-prefix-p project-root file))
+                            recentf-list))))
+      (if project-files
+          (find-file (completing-read "Recent project files: " project-files))
+        (message "No recent files found in this project"))))
+
   (use-package project
     :ensure nil
     :bind (("C-x p p" . project-switch-project)
@@ -1034,19 +1064,24 @@ Custom helper functions provide integrated workflows leveraging treemacs, eat, m
            ("C-x p t" . eat-project)      ; Modern terminal for project
            ("C-x p a" . ansi-term))       ; Alternative terminal option
     :custom
-    ;; Enhanced project switching menu with integrated actions
+    ;; Enhanced project switching menu with streamlined, logically grouped actions
     (project-switch-commands
-     '((project-find-file "Find file" ?f)
-       (consult-find "Find file externally" ?F)
-       (consult-project-buffer "Switch buffer" ?b)
-       (project-find-dir "Find directory" ?d)
+     '(;; Core File Operations (most frequent)
+       (project-find-file "Find file" ?f)
+       (consult-find "Find externally" ?F)
+       (my/project-recent-files "Recent files" ?r)
+       (consult-project-buffer "Project buffers" ?b)
+       ;; Navigation & Browsing
+       (my/project-ranger "Browse (ranger)" ?d)
        (my/consult-project-ripgrep "Search project" ?s)
+       ;; Development Workflow
        (eat-project "Terminal" ?t)
        (magit-status "Git status" ?g)
-       (my/project-show-treemacs "Treemacs" ?T)
        (my/project-smart-compile "Compile" ?c)
+       ;; Layout & Cleanup
        (my/project-workspace-setup "Workspace setup" ?w)
-       (project-kill-buffers "Kill project buffers" ?k))))
+       (my/project-show-treemacs "Treemacs" ?T)
+       (project-kill-buffers "Kill buffers" ?k))))
 #+END_SRC
 
 * Shell & Terminals
