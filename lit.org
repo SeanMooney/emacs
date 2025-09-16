@@ -968,16 +968,85 @@ EditorConfig helps maintain consistent coding styles across different editors an
 
 ** Enhanced Project Management
 Enhanced project.el integration with useful keybindings for project-based workflows.
+Custom helper functions provide integrated workflows leveraging treemacs, eat, magit, and consult.
 
 #+BEGIN_SRC emacs-lisp
+  ;; Custom project helper functions
+  (defun my/project-workspace-setup ()
+    "Setup 2-pane workspace: dired on left, eat terminal on right (50:50 split)."
+    (interactive)
+    (let ((project-root (project-root (project-current))))
+      ;; Close treemacs if it's loaded and has a workspace
+      (when (and (featurep 'treemacs)
+                 (fboundp 'treemacs-current-workspace)
+                 (treemacs-current-workspace))
+        (treemacs-kill-buffer))
+      ;; Start with a clean slate
+      (delete-other-windows)
+      ;; Open dired in project root
+      (dired project-root)
+      ;; Split window vertically (50:50)
+      (split-window-right)
+      ;; Move to right pane and open terminal
+      (other-window 1)
+      (eat-project)
+      ;; Terminal should be the active buffer (already is from other-window)
+      ))
+
+  (defun my/project-dev-setup ()
+    "Open terminal + magit for development workflow."
+    (interactive)
+    (let ((project-root (project-root (project-current))))
+      (eat-project)
+      (magit-status project-root)))
+
+  (defun my/project-smart-compile ()
+    "Compile using project-appropriate command based on detected project type."
+    (interactive)
+    (let* ((project-root (project-root (project-current)))
+           (compile-cmd (cond
+                        ((file-exists-p (expand-file-name "Makefile" project-root)) "make")
+                        ((file-exists-p (expand-file-name "package.json" project-root)) "npm run build")
+                        ((file-exists-p (expand-file-name "Cargo.toml" project-root)) "cargo build")
+                        ((file-exists-p (expand-file-name "pyproject.toml" project-root)) "python -m build")
+                        ((file-exists-p (expand-file-name "CMakeLists.txt" project-root)) "cmake --build build")
+                        (t "make"))))
+      (compile compile-cmd)))
+
+  (defun my/consult-project-ripgrep ()
+    "Ripgrep in current project with better defaults."
+    (interactive)
+    (consult-ripgrep (project-root (project-current))))
+
+  (defun my/project-show-treemacs ()
+    "Show treemacs for current project."
+    (interactive)
+    (if (treemacs-current-workspace)
+        (treemacs-select-window)
+      (treemacs)))
+
   (use-package project
     :ensure nil
     :bind (("C-x p p" . project-switch-project)
            ("C-x p f" . project-find-file)
            ("C-x p g" . project-find-regexp)
            ("C-x p d" . project-find-dir)
-           ("C-x p s" . project-shell)
-           ("C-x p e" . project-eshell)))
+           ("C-x p t" . eat-project)      ; Modern terminal for project
+           ("C-x p a" . ansi-term))       ; Alternative terminal option
+    :custom
+    ;; Enhanced project switching menu with integrated actions
+    (project-switch-commands
+     '((project-find-file "Find file" ?f)
+       (consult-find "Find file externally" ?F)
+       (consult-project-buffer "Switch buffer" ?b)
+       (project-find-dir "Find directory" ?d)
+       (my/consult-project-ripgrep "Search project" ?s)
+       (eat-project "Terminal" ?t)
+       (magit-status "Git status" ?g)
+       (my/project-show-treemacs "Treemacs" ?T)
+       (my/project-smart-compile "Compile" ?c)
+       (my/project-workspace-setup "Workspace setup" ?w)
+       (project-kill-buffers "Kill project buffers" ?k))))
 #+END_SRC
 
 * Shell & Terminals
