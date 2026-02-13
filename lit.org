@@ -294,13 +294,19 @@ This configures how Emacs handles files, symlinks, and saving state.
   (use-package autorevert
     :ensure nil
     :custom
-    (auto-revert-interval 3)                    ; Check every 3 seconds
+    (auto-revert-interval 10)                   ; Check every 10 seconds (reduces background git load)
     (auto-revert-check-vc-info t)              ; Also check version control info
     (auto-revert-verbose t)                    ; Show messages when reverting
     (global-auto-revert-non-file-buffers t)   ; Also revert non-file buffers like Dired
     (auto-revert-avoid-polling nil)            ; Use file notifications when available
     :config
     (global-auto-revert-mode 1))
+
+  ;; Prevent background git operations from acquiring the index lock.
+  ;; GIT_OPTIONAL_LOCKS=0 tells git that read-only operations (status, diff)
+  ;; should not take optional locks, avoiding conflicts with rebase/merge.
+  ;; This affects all git subprocesses spawned by Emacs (diff-hl, treemacs, vc, etc.)
+  (setenv "GIT_OPTIONAL_LOCKS" "0")
 #+END_SRC
 
 ** Persistent Undo
