@@ -1090,7 +1090,14 @@ Terminal commands are bound under the `C-c t` prefix to avoid conflicts with spe
     :bind (("C-c t t" . eat)
            ("C-c t a" . ansi-term)     ; Fallback terminal
            ("C-c t p" . eat-project))  ; Project-specific terminal
-    :hook (eat-mode . (lambda () (setq-local global-hl-line-mode nil))))
+    :hook (eat-mode . (lambda ()
+                        ;; Prevent Emacs from recentering (jumping cursor to middle)
+                        ;; when large terminal output moves point off-screen
+                        (setq-local scroll-conservatively most-positive-fixnum)
+                        (setq-local scroll-margin 0)
+                        ;; Disable visual features that interfere with terminal display
+                        (hl-line-mode -1)
+                        (pulsar-mode -1))))
 #+END_SRC
 
 * GPT & AI
