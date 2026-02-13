@@ -45,7 +45,7 @@ to ensure a clean and predictable launch.
   (when (featurep 'native-compile)
     (setq native-comp-async-report-warnings-errors nil))
 
-  ;; Ensure Emacs uses the proper PATH from bash shell
+  ;; Ensure Emacs uses the proper PATH from bash shell (early, before packages)
   (defun update-path-from-bash ()
     "Update PATH and exec-path from bash shell environment."
     (let ((path-from-bash (shell-command-to-string "bash -i -c 'echo $PATH'")))
@@ -96,6 +96,24 @@ This block bootstraps `straight.el` if it's not already installed.
   (use-package gcmh
     :config
     (gcmh-mode 1))
+
+  ;; Ensure Emacs inherits environment variables from shell
+  ;; This sources ~/.secrets via interactive bash, picking up Vertex API keys
+  (use-package exec-path-from-shell
+    :if (or (daemonp) (memq window-system '(mac ns x pgtk)))
+    :custom
+    (exec-path-from-shell-variables
+     '("PATH"
+       "MANPATH"
+       ;; Claude Code / Vertex AI authentication
+       "ANTHROPIC_VERTEX_PROJECT_ID"
+       "CLOUD_ML_REGION"
+       "CLAUDE_CODE_USE_VERTEX"
+       ;; SSH agent for git operations
+       "SSH_AUTH_SOCK"
+       "SSH_AGENT_PID"))
+    :config
+    (exec-path-from-shell-initialize))
 #+END_SRC
 
 ** Early Org Mode Setup
