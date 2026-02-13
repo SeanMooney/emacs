@@ -53,56 +53,58 @@ It is paired with `use-package` for declarative configuration.
 This block bootstraps `straight.el` if it's not already installed.
 
 #+BEGIN_SRC emacs-lisp
-  (setq straight-use-package-by-default t)
-  ;; Ensure we can get packages from nongnu.org
-  (custom-set-variables
-   '(straight-recipe-overrides '((nil
-                                (nongnu-elpa :type git
-                                             :repo "https://github.com/emacsmirror/nongnu_elpa"
-                                             :depth (full single-branch)
-                                             :local-repo "nongnu-elpa"
-                                             :build nil)))))
+      (setq straight-use-package-by-default t)
+      ;; Ensure we can get packages from nongnu.org
+      (custom-set-variables
+       '(straight-recipe-overrides '((nil
+                                    (nongnu-elpa :type git
+                                                 :repo "https://github.com/emacsmirror/nongnu_elpa"
+                                                 :depth (full single-branch)
+                                                 :local-repo "nongnu-elpa"
+                                                 :build nil)))))
 
-  (defvar bootstrap-version)
-  (let ((bootstrap-file
-         (expand-file-name "straight/repos/straight.el/bootstrap.el"
-                           (or (bound-and-true-p straight-base-dir)
-                               user-emacs-directory)))
-        (bootstrap-version 7))
-    (unless (file-exists-p bootstrap-file)
-      (with-current-buffer
-          (url-retrieve-synchronously
-           "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
-           'silent 'inhibit-cookies)
-          (goto-char (point-max))
-          (eval-print-last-sexp)))
-    (load bootstrap-file nil 'nomessage))
+      (defvar bootstrap-version)
+      (let ((bootstrap-file
+             (expand-file-name "straight/repos/straight.el/bootstrap.el"
+                               (or (bound-and-true-p straight-base-dir)
+                                   user-emacs-directory)))
+            (bootstrap-version 7))
+        (unless (file-exists-p bootstrap-file)
+          (with-current-buffer
+              (url-retrieve-synchronously
+               "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+               'silent 'inhibit-cookies)
+              (goto-char (point-max))
+              (eval-print-last-sexp)))
+        (load bootstrap-file nil 'nomessage))
 
-  (straight-use-package 'use-package)
-  (setq use-package-always-ensure t)
+      (straight-use-package 'use-package)
+      (setq use-package-always-ensure t)
 
-  ;; GCMH - Garbage Collector Magic Hack for better performance
-  (use-package gcmh
-    :config
-    (gcmh-mode 1))
+      ;; GCMH - Garbage Collector Magic Hack for better performance
+      (use-package gcmh
+        :config
+        (gcmh-mode 1))
 
-  ;; Ensure Emacs inherits environment variables from shell
-  ;; This sources ~/.secrets via interactive bash, picking up Vertex API keys
-  (use-package exec-path-from-shell
-    :if (or (daemonp) (memq window-system '(mac ns x pgtk)))
-    :custom
-    (exec-path-from-shell-variables
-     '("PATH"
-       "MANPATH"
-       ;; Claude Code / Vertex AI authentication
-       "ANTHROPIC_VERTEX_PROJECT_ID"
-       "CLOUD_ML_REGION"
-       "CLAUDE_CODE_USE_VERTEX"
-       ;; SSH agent for git operations
-       "SSH_AUTH_SOCK"
-       "SSH_AGENT_PID"))
-    :config
-    (exec-path-from-shell-initialize))
+      ;; Ensure Emacs inherits environment variables from shell
+      ;; This sources ~/.secrets via interactive bash, picking up Vertex API keys
+      (use-package exec-path-from-shell
+        :if (or (daemonp) (memq window-system '(mac ns x pgtk)))
+        :custom
+        (exec-path-from-shell-variables
+         '("PATH"
+           "MANPATH"
+           ;; Claude Code / Vertex AI authentication
+           "ANTHROPIC_VERTEX_PROJECT_ID"
+           "CLOUD_ML_REGION"
+           "CLAUDE_CODE_USE_VERTEX"
+           ;; SSH agent for git operations
+           "SSH_AUTH_SOCK"
+           "SSH_AGENT_PID"
+           ;;GPG
+  	"GPG_TTY"))
+        :config
+        (exec-path-from-shell-initialize))
 #+END_SRC
 
 ** Early Org Mode Setup
@@ -1089,23 +1091,39 @@ Terminal commands are bound under the `C-c t` prefix to avoid conflicts with spe
 * GPT & AI
 ** gptel
 Configuration for `gptel`, a client for interacting with Large Language Models.
+The default backend is Z.AI (Zhipu AI GLM-5) with a local Ollama instance as a fallback.
 
 #+BEGIN_SRC emacs-lisp
   (use-package gptel
     :custom
     (gptel-default-mode 'org-mode)
+    (epg-pinentry-mode 'loopback)
     :config
-    ;; Configure to use a local Ollama instance with configurable host
+    ;; Allow Emacs to prompt for GPG passphrase in minibuffer
+    (setq epa-pinentry-mode 'loopback)
+    ;; Define Z.AI (Zhipu AI) backend using OpenAI-compatible API
+    ;; API key is read securely from ~/.authinfo.gpg via auth-source
+    (setq gptel-backend (gptel-make-openai "Z.AI"
+                          :host "api.z.ai"
+                          :endpoint "/api/coding/paas/v4/chat/completions"
+                          :stream t
+                          :key #'gptel-api-key-from-auth-source
+                          :models '(glm-4.7
+  				  glm-5
+  				  glm-4.7-flash
+  				    ))
+          gptel-model 'glm-4.7)
+
+    ;; Keep local Ollama as a secondary backend (switchable via C-c RET b)
     (let ((ollama-host (or (getenv "OLLAMA_HOST") "192.168.16.172:11434")))
-      (setq gptel-backend (gptel-make-ollama "Ollama"
-                            :host ollama-host
-                            :stream t
-                            :models '(
-  				   "hf.co/unsloth/gemma-3-4b-it-qat-GGUF:UD-Q8_K_XL"
-  				   "hf.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:UD-Q4_K_XL"
-  				   "hf.co/unsloth/Magistral-Small-2506-GGUF:Q3_K_XL"
-                                     "omaciel/ticketeer-granite3.3"
-                                     "hf.co/unsloth/GLM-Z1-9B-0414-GGUF:Q5_K_XL"))))
+      (gptel-make-ollama "Ollama"
+        :host ollama-host
+        :stream t
+        :models '("hf.co/unsloth/gemma-3-4b-it-qat-GGUF:UD-Q8_K_XL"
+                  "hf.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:UD-Q4_K_XL"
+                  "hf.co/unsloth/Magistral-Small-2506-GGUF:Q3_K_XL"
+                  "omaciel/ticketeer-granite3.3"
+                  "hf.co/unsloth/GLM-Z1-9B-0414-GGUF:Q5_K_XL")))
     ;; Add error handling for unavailable backends
     :init
     (defun my/gptel-check-backend ()

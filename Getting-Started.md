@@ -508,10 +508,14 @@ This configuration is built on carefully selected packages that work together se
 ### **🤖 AI Integration Stack**
 
 #### **gptel** - LLM Client
-- **What it does**: Interface to language models (local Ollama instance)
-- **Why it's better**: Privacy-focused, works with local models
-- **How to use**: Powers all `C-c g` AI functions
-- **Key features**: Streaming responses, multiple models, local processing
+- **What it does**: Interface to language models (Z.AI GLM-5 default, local Ollama fallback)
+- **Why it's better**: Cloud AI for quality, local models for privacy — switchable on the fly
+- **How to use**: Powers all `C-c g` AI functions; switch backends with `C-c RET b` in gptel buffers
+- **Key features**: Streaming responses, multiple backends, secure API key via `~/.authinfo.gpg`
+- **Setup**: Add your Z.AI API key to `~/.authinfo.gpg`:
+  ```
+  machine api.z.ai login apikey password <your-z-ai-api-key>
+  ```
 
 #### **MCP (Model Context Protocol)** - Smart Context
 - **What it does**: Provides project file context to AI
@@ -856,7 +860,9 @@ The AI functions connect to your local Ollama instance. Modify the `gptel` confi
 - **Laggy typing**: Disable some visual features temporarily, check for runaway processes
 
 ### **AI & External Tool Issues**
-- **AI functions not working**: Verify Ollama running at `192.168.16.172:11434`
+- **AI auth errors**: Verify `~/.authinfo.gpg` contains `machine api.z.ai login apikey password <key>` and that GnuPG is installed
+- **AI functions not working (Z.AI)**: Test with `M-: (gptel-api-key-from-auth-source "api.z.ai")` — should return your key after GPG passphrase prompt
+- **AI functions not working (Ollama)**: Switch to Ollama backend with `C-c RET b` and verify Ollama running at `192.168.16.172:11434`
 - **Spell check not working**: Install `aspell` or `hunspell` system packages
 - **LSP not starting**: Install language server for your language (e.g., `pip install pyright`)
 - **Search not working**: Install `ripgrep` (`rg` command)
