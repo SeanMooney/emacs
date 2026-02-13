@@ -22,6 +22,7 @@
  ("emacs-reformatter" . "c52e91d5438b9bf16b77b4384822e254f10a6b0a")
  ("emacs-which-key" . "38d4308d1143b61e4004b6e7a940686784e51500")
  ("emacsmirror-mirror" . "81da178dc8b1cfad2e6704f7dce6370ab679ec39")
+ ("exec-path-from-shell" . "7552abf032a383ff761e7d90e6b5cbb4658a728a")
  ("external-completion" . "547b335f9179bcd07b11658d2fd61e3cb02b256e")
  ("f.el" . "931b6d0667fe03e7bf1c6c282d6d8d7006143c52")
  ("flymake" . "475398458184ec45cf38e9022845a0c4944e639c")
