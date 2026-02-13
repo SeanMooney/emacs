@@ -39,20 +39,12 @@ to ensure a clean and predictable launch.
   (setq visible-bell t)
 
   ;; Use short 'y/n' answers instead of 'yes/no'
-  (defalias 'yes-or-no-p 'y-or-n-p)
+  (setq use-short-answers t)
 
   ;; Reduce native compilation noise
   (when (featurep 'native-compile)
     (setq native-comp-async-report-warnings-errors nil))
 
-  ;; Ensure Emacs uses the proper PATH from bash shell (early, before packages)
-  (defun update-path-from-bash ()
-    "Update PATH and exec-path from bash shell environment."
-    (let ((path-from-bash (shell-command-to-string "bash -i -c 'echo $PATH'")))
-      (setenv "PATH" (string-trim path-from-bash))
-      (setq exec-path (split-string (getenv "PATH") path-separator))))
-
-  (update-path-from-bash)
 #+END_SRC
 
 ** Package Management (straight.el)
@@ -88,9 +80,6 @@ This block bootstraps `straight.el` if it's not already installed.
 
   (straight-use-package 'use-package)
   (setq use-package-always-ensure t)
-
-  ;; Diminish hides or shortens minor mode names in the mode line
-  (straight-use-package 'diminish)
 
   ;; GCMH - Garbage Collector Magic Hack for better performance
   (use-package gcmh
@@ -178,14 +167,9 @@ Consolidated configuration for user settings, file handling, editing behavior, a
     (backup-inhibited t)
     ;; Disable auto-save files (#filename#)
     (auto-save-default nil)
-    (auto-save-mode nil)
     ;; Editing behavior
     (completion-ignore-case t)
     (completions-detailed t)
-    ;; Highlight the current line in programming, text, and org modes.
-    (global-hl-line-mode t)
-    ;; When pasting, overwrite the currently selected region.
-    (delete-selection-mode 1)
     (help-window-select t)
     ;; Don't store duplicate entries in the kill ring
     (kill-do-not-save-duplicates t)
@@ -196,6 +180,10 @@ Consolidated configuration for user settings, file handling, editing behavior, a
     (completions-max-height 15)
     (tab-always-indent 'complete)
     :config
+    ;; Highlight the current line in programming, text, and org modes.
+    (global-hl-line-mode 1)
+    ;; When pasting, overwrite the currently selected region.
+    (delete-selection-mode 1)
     ;; Font lock (syntax highlighting)
     (global-font-lock-mode 1)
     (setq font-lock-maximum-decoration t))
@@ -304,7 +292,7 @@ This configures how Emacs handles files, symlinks, and saving state.
   (use-package autorevert
     :ensure nil
     :custom
-    (auto-revert-interval 1)                    ; Check every second
+    (auto-revert-interval 3)                    ; Check every 3 seconds
     (auto-revert-check-vc-info t)              ; Also check version control info
     (auto-revert-verbose t)                    ; Show messages when reverting
     (global-auto-revert-non-file-buffers t)   ; Also revert non-file buffers like Dired
@@ -453,7 +441,7 @@ These settings control the appearance of the Emacs frame, windows, and how they 
 
 #+BEGIN_SRC emacs-lisp
   ;; Enable smooth, pixel-based scrolling.
-  (setq pixel-scroll-precision-mode t)
+  (pixel-scroll-precision-mode 1)
   (setq pixel-scroll-precision-use-momentum nil)
 
   ;; Add a hint of transparency and maximize the frame on startup.
@@ -463,8 +451,9 @@ These settings control the appearance of the Emacs frame, windows, and how they 
   (add-to-list 'default-frame-alist '(fullscreen . maximized))
 
   ;; Improve display characters in terminal mode.
-  (set-display-table-slot standard-display-table 'vertical-border ?\u2502)
-  (set-display-table-slot standard-display-table 'truncation ?\u2192)
+  (when standard-display-table
+    (set-display-table-slot standard-display-table 'vertical-border ?\u2502)
+    (set-display-table-slot standard-display-table 'truncation ?\u2192))
 
   ;; Custom function to toggle a 2-window split between vertical and horizontal.
   (defun toggle-window-split ()
@@ -509,7 +498,6 @@ I use a modern completion system composed of several packages that work together
     (completion-category-overrides '((file (styles basic partial-completion)))))
 
   (use-package corfu
-      :hook (prog-mode . corfu-mode)
       :custom
       (corfu-auto nil)
       (corfu-auto-delay 0.1)
@@ -655,7 +643,7 @@ Additional UI packages that help with discoverability and navigation.
 
   ;; Clean up mode line by hiding/shortening minor mode names
   (use-package diminish
-    :ensure nil  ; Already installed above
+    :ensure t
     :config
     ;; Hide these minor modes from the mode line
     (diminish 'which-key-mode)
@@ -699,8 +687,8 @@ Additional UI packages that help with discoverability and navigation.
                 (project-root (project-root project)))
       (treemacs-block-refresh
         ;; Remove all projects from workspace
-        (treemacs-remove-project-from-workspace
-         (treemacs-workspace->projects (treemacs-current-workspace)))
+        (dolist (proj (treemacs-workspace->projects (treemacs-current-workspace)))
+          (treemacs-do-remove-project-from-workspace proj t))
         ;; Add and display only the current project
         (treemacs-add-and-display-current-project-exclusively))))
 
@@ -767,7 +755,7 @@ Particularly useful for catching typos in variable names and comments.
 
 #+BEGIN_SRC emacs-lisp
   ;; Codespell integration for catching spelling errors in code
-  (defun my-codespell-buffer ()
+  (defun my/codespell-buffer ()
     "Run codespell on the current buffer."
     (interactive)
     (if (executable-find "codespell")
@@ -783,7 +771,7 @@ Particularly useful for catching typos in variable names and comments.
           (delete-file temp-file))
       (message "Codespell not found. Install with: pip install codespell")))
 
-  (defun my-codespell-region (start end)
+  (defun my/codespell-region (start end)
     "Run codespell on the selected region."
     (interactive "r")
     (if (executable-find "codespell")
@@ -799,7 +787,7 @@ Particularly useful for catching typos in variable names and comments.
           (delete-file temp-file))
       (message "Codespell not found. Install with: pip install codespell")))
 
-  (defun my-codespell-project ()
+  (defun my/codespell-project ()
     "Run codespell on the current project."
     (interactive)
     (if (executable-find "codespell")
@@ -915,9 +903,7 @@ This section configures the Python development environment, including virtual en
                           (setq-local python-indent-offset 4)))
     :custom
     ;; Use the fast and powerful `ruff` linter for checking Python code.
-    (python-check-command "ruff check --ignore-noqa")
-    ;; Ensure syntax highlighting works properly
-    (python-font-lock-keywords-level 2))
+    (python-check-command "ruff check --ignore-noqa"))
 #+END_SRC
 
 ** Language: Markdown
@@ -1197,105 +1183,101 @@ model with relevant information about the project you're working on.
 This section is for custom functions and global keybindings that don't belong to a specific package.
 
 #+BEGIN_SRC emacs-lisp
+  ;; Helper for AI functions to display response in a dedicated buffer
+  (defun my/gptel--display-response (response info)
+    "Display gptel RESPONSE in a dedicated buffer.
+INFO is the plist of request metadata."
+    (if (stringp response)
+        (with-current-buffer (get-buffer-create "*gptel-response*")
+          (erase-buffer)
+          (insert response)
+          (goto-char (point-min))
+          (display-buffer (current-buffer)))
+      (message "gptel request failed: %s" (plist-get info :status))))
+
   ;; AI-enhanced development commands
   (defun my/explain-code-with-ai ()
     "Explain selected code using AI."
     (interactive)
-    (condition-case err
-        (if (region-active-p)
-            (gptel-send (concat "Explain this code:\n\n"
+    (if (region-active-p)
+        (gptel-request (concat "Explain this code:\n\n"
                                (buffer-substring-no-properties
-                                (region-beginning) (region-end))))
-          (message "Please select code to explain"))
-      (error
-       (message "Error with AI explain: %s" (error-message-string err)))))
+                                (region-beginning) (region-end)))
+          :callback #'my/gptel--display-response)
+      (message "Please select code to explain")))
 
   (defun my/review-code-with-ai ()
     "Review selected code for improvements."
     (interactive)
-    (condition-case err
-        (if (region-active-p)
-            (gptel-send (concat "Review this code for best practices and suggest improvements:\n\n"
+    (if (region-active-p)
+        (gptel-request (concat "Review this code for best practices and suggest improvements:\n\n"
                                (buffer-substring-no-properties
-                                (region-beginning) (region-end))))
-          (message "Please select code to review"))
-      (error
-       (message "Error with AI review: %s" (error-message-string err)))))
+                                (region-beginning) (region-end)))
+          :callback #'my/gptel--display-response)
+      (message "Please select code to review")))
 
   (defun my/document-code-with-ai ()
     "Generate documentation for selected code using AI."
     (interactive)
-    (condition-case err
-        (if (region-active-p)
-            (gptel-send (concat "Generate documentation for this code:\n\n"
+    (if (region-active-p)
+        (gptel-request (concat "Generate documentation for this code:\n\n"
                                (buffer-substring-no-properties
-                                (region-beginning) (region-end))))
-          (message "Please select code to document"))
-      (error
-       (message "Error with AI documentation: %s" (error-message-string err)))))
+                                (region-beginning) (region-end)))
+          :callback #'my/gptel--display-response)
+      (message "Please select code to document")))
 
   ;; AI-enhanced writing assistance functions
   (defun my/improve-writing-with-ai ()
     "Improve selected text for clarity, grammar, and style using AI."
     (interactive)
-    (condition-case err
-        (if (region-active-p)
-            (gptel-send (concat "Improve this text for clarity, grammar, and style. "
+    (if (region-active-p)
+        (gptel-request (concat "Improve this text for clarity, grammar, and style. "
                                "Keep the meaning and intent intact:\n\n"
                                (buffer-substring-no-properties
-                                (region-beginning) (region-end))))
-          (message "Please select text to improve"))
-      (error
-       (message "Error with AI writing improvement: %s" (error-message-string err)))))
+                                (region-beginning) (region-end)))
+          :callback #'my/gptel--display-response)
+      (message "Please select text to improve")))
 
   (defun my/adjust-tone-with-ai (tone)
     "Adjust the tone of selected text (professional, casual, academic, friendly)."
     (interactive "sTone (professional/casual/academic/friendly): ")
-    (condition-case err
-        (if (region-active-p)
-            (gptel-send (concat (format "Rewrite this text in a %s tone while keeping the core message:\n\n" tone)
+    (if (region-active-p)
+        (gptel-request (concat (format "Rewrite this text in a %s tone while keeping the core message:\n\n" tone)
                                (buffer-substring-no-properties
-                                (region-beginning) (region-end))))
-          (message "Please select text to adjust tone"))
-      (error
-       (message "Error with AI tone adjustment: %s" (error-message-string err)))))
+                                (region-beginning) (region-end)))
+          :callback #'my/gptel--display-response)
+      (message "Please select text to adjust tone")))
 
   (defun my/summarize-text-with-ai ()
     "Summarize selected text using AI."
     (interactive)
-    (condition-case err
-        (if (region-active-p)
-            (gptel-send (concat "Provide a clear, concise summary of this text:\n\n"
+    (if (region-active-p)
+        (gptel-request (concat "Provide a clear, concise summary of this text:\n\n"
                                (buffer-substring-no-properties
-                                (region-beginning) (region-end))))
-          (message "Please select text to summarize"))
-      (error
-       (message "Error with AI summarization: %s" (error-message-string err)))))
+                                (region-beginning) (region-end)))
+          :callback #'my/gptel--display-response)
+      (message "Please select text to summarize")))
 
   (defun my/expand-text-with-ai ()
     "Expand selected text with more detail using AI."
     (interactive)
-    (condition-case err
-        (if (region-active-p)
-            (gptel-send (concat "Expand this text with more detail and examples while maintaining clarity:\n\n"
+    (if (region-active-p)
+        (gptel-request (concat "Expand this text with more detail and examples while maintaining clarity:\n\n"
                                (buffer-substring-no-properties
-                                (region-beginning) (region-end))))
-          (message "Please select text to expand"))
-      (error
-       (message "Error with AI text expansion: %s" (error-message-string err)))))
+                                (region-beginning) (region-end)))
+          :callback #'my/gptel--display-response)
+      (message "Please select text to expand")))
 
   (defun my/proofread-with-ai ()
     "Proofread selected text for grammar, spelling, and style issues using AI."
     (interactive)
-    (condition-case err
-        (if (region-active-p)
-            (gptel-send (concat "Proofread this text for grammar, spelling, punctuation, and style issues. "
+    (if (region-active-p)
+        (gptel-request (concat "Proofread this text for grammar, spelling, punctuation, and style issues. "
                                "Provide specific corrections and explanations:\n\n"
                                (buffer-substring-no-properties
-                                (region-beginning) (region-end))))
-          (message "Please select text to proofread"))
-      (error
-       (message "Error with AI proofreading: %s" (error-message-string err)))))
+                                (region-beginning) (region-end)))
+          :callback #'my/gptel--display-response)
+      (message "Please select text to proofread")))
 
   ;; Bury the current buffer instead of killing it.
   (global-set-key (kbd "C-c k") #'bury-buffer)
@@ -1341,7 +1323,6 @@ This section is for custom functions and global keybindings that don't belong to
   (global-set-key (kbd "C-c g p") #'my/proofread-with-ai)          ; Proofread
 
   ;; Writing assistance and accessibility keybindings
-  (global-set-key (kbd "C-c o") #'olivetti-mode)          ; Focus mode
   (global-set-key (kbd "C-c W") #'writegood-mode)         ; Toggle writing analysis
 
   ;; Spell checking keybindings (C-c s prefix)
@@ -1350,9 +1331,9 @@ This section is for custom functions and global keybindings that don't belong to
   (global-set-key (kbd "C-c s l") #'ispell-change-dictionary)            ; Change dictionary
 
   ;; Codespell keybindings (C-c s prefix)
-  (global-set-key (kbd "C-c s b") #'my-codespell-buffer)   ; Check buffer
-  (global-set-key (kbd "C-c s r") #'my-codespell-region)   ; Check region
-  (global-set-key (kbd "C-c s p") #'my-codespell-project)  ; Check project
+  (global-set-key (kbd "C-c s b") #'my/codespell-buffer)   ; Check buffer
+  (global-set-key (kbd "C-c s r") #'my/codespell-region)   ; Check region
+  (global-set-key (kbd "C-c s p") #'my/codespell-project)  ; Check project
 #+END_SRC
 
 * Package Management
