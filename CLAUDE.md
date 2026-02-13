@@ -69,6 +69,39 @@ All package configuration follows this pattern in `lit.org`:
   :config (setup-code))
 ```
 
+### Built-in Packages Require `:straight (:type built-in)`
+**CRITICAL**: Because `straight-use-package-by-default` is set to `t`, any `use-package` declaration for a built-in Emacs package **must** include `:straight (:type built-in)` in addition to `:ensure nil`. Without it, straight.el will attempt to download the package from recipe repositories and fail.
+
+```elisp
+;; CORRECT - built-in package
+(use-package files
+  :ensure nil
+  :straight (:type built-in)
+  :custom
+  (load-prefer-newer t))
+
+;; WRONG - will cause "Could not find package" error
+(use-package files
+  :ensure nil
+  :custom
+  (load-prefer-newer t))
+```
+
+**Never remove `:straight (:type built-in)` from built-in packages.** If wrapping a built-in feature (e.g., `pixel-scroll`) in a new `use-package` form, always include both `:ensure nil` and `:straight (:type built-in)`.
+
+### Don't Move Computed Values from `:config` to `:custom`
+`:custom` values are evaluated early (at macro-expansion time), before the package is loaded. Only move `setq` to `:custom` when the value is a **simple literal** (number, string, symbol, quoted list). If the value references a **package-defined variable or function**, it must stay as `setq` in `:config`.
+
+```elisp
+;; CORRECT - computed value stays in :config
+:config
+(setq treemacs-collapse-dirs (if treemacs-python-executable 3 0))
+
+;; WRONG - treemacs-python-executable is void at :custom evaluation time
+:custom
+(treemacs-collapse-dirs (if treemacs-python-executable 3 0))
+```
+
 ### Key Binding Conventions
 - `C-c` prefix for custom commands
 - `C-c f` - fontaine (font management)

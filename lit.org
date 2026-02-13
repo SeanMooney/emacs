@@ -101,21 +101,21 @@ This block bootstraps `straight.el` if it's not already installed.
            ;; SSH agent for git operations
            "SSH_AUTH_SOCK"
            "SSH_AGENT_PID"
-           ;;GPG
-  	"GPG_TTY"))
+           ;; GPG
+           "GPG_TTY"))
         :config
         (exec-path-from-shell-initialize))
 #+END_SRC
 
 ** Early Org Mode Setup
 This configures Org mode basics, especially the function to automatically tangle this configuration file
-(`Emacs.org` -> `init.el`) every time it is saved.
+(`lit.org` -> `init.el`) every time it is saved.
 
 #+BEGIN_SRC emacs-lisp
   (setq org-support-shift-select t)
 
-  ;; Automatically tangle our Emacs.org config file when we save it
-  (defun efs/org-babel-tangle-config ()
+  ;; Automatically tangle our lit.org config file when we save it
+  (defun my/org-babel-tangle-config ()
     "Auto-tangle config file on save."
     (condition-case err
         (when (and (buffer-file-name)
@@ -129,7 +129,7 @@ This configures Org mode basics, especially the function to automatically tangle
 
   (add-hook 'org-mode-hook
             (lambda ()
-              (add-hook 'after-save-hook #'efs/org-babel-tangle-config nil 'local)))
+              (add-hook 'after-save-hook #'my/org-babel-tangle-config nil 'local)))
 
 
   (with-eval-after-load 'org
@@ -181,6 +181,8 @@ Consolidated configuration for user settings, file handling, editing behavior, a
     ;; Completion settings
     (completions-max-height 15)
     (tab-always-indent 'complete)
+    ;; Improve line spacing for better readability
+    (line-spacing 0.2)
     :config
     ;; Highlight the current line in programming, text, and org modes.
     (global-hl-line-mode 1)
@@ -214,10 +216,9 @@ Additional packages that enhance the text editing experience beyond built-in fun
   (use-package elec-pair
     :ensure nil
     :hook (after-init . electric-pair-mode)
-    :config
-    ;; A handy command for deleting a pair of surrounding delimiters.
-    (global-set-key (kbd "C-c d") #'delete-pair)
-    (setq delete-pair-blink-delay 0.0))
+    :bind ("C-c d" . delete-pair)
+    :custom
+    (delete-pair-blink-delay 0.0))
 
   ;; Visually highlight matching parentheses.
   (use-package paren
@@ -229,6 +230,7 @@ Additional packages that enhance the text editing experience beyond built-in fun
 
   ;; Allows repeating commands with C-x z.
   (use-package repeat
+    :ensure nil
     :config
     (repeat-mode 1))
 
@@ -339,7 +341,9 @@ Settings for Emacs's built-in version control integration.
     :ensure nil
     :custom
     ;; VC should follow symbolic links.
-    (vc-follow-symlinks t))
+    (vc-follow-symlinks t)
+    :config
+    (add-to-list 'vc-directory-exclusion-list ".venv"))
 #+END_SRC
 ** Version Control (Magit)
 settings for magit for more powerful git integration
@@ -401,14 +405,9 @@ I use the `fontaine` package to easily switch between predefined font configurat
              :italic-slant italic)))
     :bind ("C-c f" . fontaine-set-preset))
 
-  ;; Improve line spacing for better readability
-  (setq-default line-spacing 0.2)
-
   ;; Pulsar briefly highlights the current line after certain commands
   ;; Excellent accessibility feature for tracking cursor movement
   (use-package pulsar
-    :config
-    (pulsar-global-mode 1)
     :custom
     ;; Highlight line after these commands for better cursor tracking
     (pulsar-pulse-functions '(isearch-repeat-forward
@@ -427,7 +426,9 @@ I use the `fontaine` package to easily switch between predefined font configurat
                               windmove-right
                               windmove-left
                               windmove-up
-                              windmove-down)))
+                              windmove-down))
+    :config
+    (pulsar-global-mode 1))
 #+END_SRC
 
 ** Theming (ef-themes)
@@ -449,13 +450,16 @@ These settings control the appearance of the Emacs frame, windows, and how they 
 
 #+BEGIN_SRC emacs-lisp
   ;; Enable smooth, pixel-based scrolling.
-  (pixel-scroll-precision-mode 1)
-  (setq pixel-scroll-precision-use-momentum nil)
+  (use-package pixel-scroll
+    :ensure nil
+    :straight (:type built-in)
+    :custom
+    (pixel-scroll-precision-use-momentum nil)
+    :config
+    (pixel-scroll-precision-mode 1))
 
   ;; Add a hint of transparency and maximize the frame on startup.
-  (set-frame-parameter (selected-frame) 'alpha-background 93)
   (add-to-list 'default-frame-alist '(alpha-background . 93))
-  (set-frame-parameter (selected-frame) 'fullscreen 'maximized)
   (add-to-list 'default-frame-alist '(fullscreen . maximized))
 
   ;; Improve display characters in terminal mode.
@@ -464,7 +468,7 @@ These settings control the appearance of the Emacs frame, windows, and how they 
     (set-display-table-slot standard-display-table 'truncation ?\u2192))
 
   ;; Custom function to toggle a 2-window split between vertical and horizontal.
-  (defun toggle-window-split ()
+  (defun my/toggle-window-split ()
     "Switch between horizontal and vertical split window layout."
     (interactive)
     (if (= (count-windows) 2)
@@ -479,7 +483,7 @@ These settings control the appearance of the Emacs frame, windows, and how they 
               (split-window-horizontally)
             (split-window-vertically)))
       (message "This command only works when there are exactly two windows.")))
-  (global-set-key (kbd "C-c j") #'toggle-window-split)
+  (global-set-key (kbd "C-c j") #'my/toggle-window-split)
 #+END_SRC
 ** Minibuffer & Completion Framework
 I use a modern completion system composed of several packages that work together.
@@ -549,8 +553,9 @@ I use a modern completion system composed of several packages that work together
       (keymap-set org-mode-map "C-j" #'consult-org-heading))
     (with-eval-after-load "org-agenda"
       (keymap-set org-agenda-mode-map "C-j" #'consult-org-agenda))
+    :custom
+    (consult-line-start-from-top nil)
     :config
-    (setq consult-line-start-from-top nil)
     ;; Integrate with xref for "find definitions/references"
     (with-eval-after-load "xref"
       (require 'consult-xref)
@@ -564,8 +569,8 @@ Configuration for Dired, Emacs's built-in file manager.
 
 #+BEGIN_SRC emacs-lisp
   (use-package dired
-    :straight (:type built-in)
     :ensure nil
+    :straight (:type built-in)
     :hook ((dired-mode . hl-line-mode)
            (dired-mode . dired-hide-details-mode))
     :custom
@@ -632,6 +637,7 @@ Additional UI packages that help with discoverability and navigation.
 #+BEGIN_SRC emacs-lisp
   ;; `which-key` displays available keybindings in a popup.
   (use-package which-key
+    :ensure nil
     :config
     (which-key-mode))
 
@@ -651,7 +657,6 @@ Additional UI packages that help with discoverability and navigation.
 
   ;; Clean up mode line by hiding/shortening minor mode names
   (use-package diminish
-    :ensure t
     :config
     ;; Hide these minor modes from the mode line
     (diminish 'which-key-mode)
@@ -670,18 +675,19 @@ Additional UI packages that help with discoverability and navigation.
            ("C-x t 1"   . treemacs-delete-other-windows)
            ("C-x t t"   . treemacs)
            ("C-x t d"   . treemacs-select-directory))
+    :custom
+    (treemacs-display-in-side-window t)
+    (treemacs-follow-after-init t)
+    (treemacs-expand-after-init t)
+    (treemacs-git-command-pipe "")
+    (treemacs-hide-dot-git-directory t)
+    (treemacs-indentation 2)
+    (treemacs-litter-directories '("/node_modules" "/.venv" "/.cask"))
+    (treemacs-position 'left)
+    (treemacs-show-hidden-files t)
+    (treemacs-width 35)
     :config
-    (setq treemacs-collapse-dirs (if treemacs-python-executable 3 0)
-          treemacs-display-in-side-window t
-          treemacs-follow-after-init t
-          treemacs-expand-after-init t
-          treemacs-git-command-pipe ""
-          treemacs-hide-dot-git-directory t
-          treemacs-indentation 2
-          treemacs-litter-directories '("/node_modules" "/.venv" "/.cask")
-          treemacs-position 'left
-          treemacs-show-hidden-files t
-          treemacs-width 35)
+    (setq treemacs-collapse-dirs (if treemacs-python-executable 3 0))
     (treemacs-follow-mode t)
     (treemacs-filewatch-mode t)
     (treemacs-fringe-indicator-mode 'always)
@@ -820,10 +826,11 @@ These are language-agnostic tools that form the foundation of the IDE experience
       :ensure nil
       :bind (:map flymake-mode-map
              ("C-c n" . flymake-goto-next-error)
-             ("C-c p" . flymake-goto-prev-error)))
+             ("C-c N" . flymake-goto-prev-error)))
 
     ;; `eglot` is a minimal, built-in LSP client.
     (use-package eglot
+      :ensure nil
       :hook ((python-mode . eglot-ensure)
              (python-ts-mode . eglot-ensure)
              (js-mode . eglot-ensure)
@@ -891,8 +898,6 @@ Tree-sitter provides faster and more accurate syntax parsing, which improves hig
 This section configures the Python development environment, including virtual environment management with `pyvenv` and linting with `ruff`.
 
 #+BEGIN_SRC emacs-lisp
-  (add-to-list 'vc-directory-exclusion-list ".venv")
-
   (use-package pyvenv
     :config
     (pyvenv-mode 1)
@@ -917,14 +922,14 @@ This section configures the Python development environment, including virtual en
 ** Language: Markdown
 This section configures the Markdown syntax highlighting.
 
-#+begin_src emacs-lisp
+#+BEGIN_SRC emacs-lisp
   (use-package markdown-mode
-    :ensure t
     :mode ("README\\.md\\'" . gfm-mode)
-    :init (setq markdown-command "multimarkdown")
     :bind (:map markdown-mode-map
-           ("C-c C-e" . markdown-do)))
-#+end_src
+           ("C-c C-e" . markdown-do))
+    :custom
+    (markdown-command "multimarkdown"))
+#+END_SRC
 
 ** Language: Zig
 This section configures Zig development support with syntax highlighting, LSP integration, and Tree-sitter parsing.
@@ -1124,10 +1129,8 @@ The default backend is Z.AI (Zhipu AI GLM-5) with a local Ollama instance as a f
   (use-package gptel
     :custom
     (gptel-default-mode 'org-mode)
-    (epg-pinentry-mode 'loopback)
+    (epa-pinentry-mode 'loopback)
     :config
-    ;; Allow Emacs to prompt for GPG passphrase in minibuffer
-    (setq epa-pinentry-mode 'loopback)
     ;; Define Z.AI (Zhipu AI) backend using OpenAI-compatible API
     ;; API key is read securely from ~/.authinfo.gpg via auth-source
     (setq gptel-backend (gptel-make-openai "Z.AI"
@@ -1136,9 +1139,8 @@ The default backend is Z.AI (Zhipu AI GLM-5) with a local Ollama instance as a f
                           :stream t
                           :key #'gptel-api-key-from-auth-source
                           :models '(glm-4.7
-  				  glm-5
-  				  glm-4.7-flash
-  				    ))
+                                    glm-5
+                                    glm-4.7-flash))
           gptel-model 'glm-4.7)
 
     ;; Keep local Ollama as a secondary backend (switchable via C-c RET b)
@@ -1151,8 +1153,8 @@ The default backend is Z.AI (Zhipu AI GLM-5) with a local Ollama instance as a f
                   "hf.co/unsloth/Magistral-Small-2506-GGUF:Q3_K_XL"
                   "omaciel/ticketeer-granite3.3"
                   "hf.co/unsloth/GLM-Z1-9B-0414-GGUF:Q5_K_XL")))
+
     ;; Add error handling for unavailable backends
-    :init
     (defun my/gptel-check-backend ()
       "Check if gptel backend is available and provide feedback."
       (condition-case err
@@ -1191,23 +1193,23 @@ model with relevant information about the project you're working on.
        ;; Only enabled if uvx is available.
        ,@(when (executable-find "uvx")
            `(("fetch" . (:command "uvx" :args ("mcp-server-fetch")))))))
-    :config
-    ;; Load the hub functionality and tell gptel to use MCP as a context provider.
-    (require 'mcp-hub)
     :hook (after-init . (lambda ()
                           (when mcp-hub-servers
                             (condition-case err
                                 (mcp-hub-start-all-server)
                               (error
-                               (message "MCP servers failed to start: %s" (error-message-string err))))))))
+                               (message "MCP servers failed to start: %s" (error-message-string err)))))))
+    :config
+    ;; Load the hub functionality and tell gptel to use MCP as a context provider.
+    (require 'mcp-hub))
 #+END_SRC
 
 ** claude-code
 
-#+begin_src emacs-lisp
+#+BEGIN_SRC emacs-lisp
   (use-package claude-code
     :straight (:type git :host github :repo "stevemolitor/claude-code.el" :branch "main"
-	       :files ("*.el" (:exclude "demo.gif")))
+               :files ("*.el" (:exclude "demo.gif")))
     :bind-keymap
     ("C-c a" . claude-code-command-map)  ; Choose your preferred prefix
     :custom
@@ -1219,11 +1221,11 @@ model with relevant information about the project you're working on.
     (claude-code-mode)
     ;; Configure for your wide screen setup
     (add-to-list 'display-buffer-alist
-		 '("^\\*claude"
-		   (display-buffer-in-side-window)
-		   (side . right)
-		   (window-width . 0.33))))
-#+end_src
+                 '("^\\*claude"
+                   (display-buffer-in-side-window)
+                   (side . right)
+                   (window-width . 0.33))))
+#+END_SRC
 * Custom Commands & Bindings
 This section is for custom functions and global keybindings that don't belong to a specific package.
 
@@ -1602,14 +1604,16 @@ All package management functions are bound under the `C-c p` prefix for easy acc
 
 #+BEGIN_SRC emacs-lisp
   ;; Package management keybindings (C-c p prefix)
-  (global-set-key (kbd "C-c p m") #'my/straight-transient)        ; Main transient menu
-  (global-set-key (kbd "C-c p f") #'my/straight-freeze-versions)  ; Freeze versions
-  (global-set-key (kbd "C-c p u") #'my/straight-update-all)       ; Update all packages
-  (global-set-key (kbd "C-c p c") #'my/straight-check-all)        ; Check package health
-  (global-set-key (kbd "C-c p p") #'my/straight-prune-build)      ; Prune build artifacts
-  (global-set-key (kbd "C-c p r") #'my/straight-rebuild-package)  ; Rebuild package
-  (global-set-key (kbd "C-c p b") #'my/straight-backup-lockfile)  ; Backup lockfile
-  (global-set-key (kbd "C-c p R") #'my/straight-restore-lockfile) ; Restore lockfile
-  (global-set-key (kbd "C-c p C") #'my/straight-commit-lockfile)  ; Commit lockfile
-  (global-set-key (kbd "C-c p d") #'my/straight-diff-lockfile)    ; Diff lockfile
+  (define-prefix-command 'my/package-map)
+  (global-set-key (kbd "C-c p") 'my/package-map)
+  (define-key my/package-map (kbd "m") #'my/straight-transient)        ; Main transient menu
+  (define-key my/package-map (kbd "f") #'my/straight-freeze-versions)  ; Freeze versions
+  (define-key my/package-map (kbd "u") #'my/straight-update-all)       ; Update all packages
+  (define-key my/package-map (kbd "c") #'my/straight-check-all)        ; Check package health
+  (define-key my/package-map (kbd "p") #'my/straight-prune-build)      ; Prune build artifacts
+  (define-key my/package-map (kbd "r") #'my/straight-rebuild-package)  ; Rebuild package
+  (define-key my/package-map (kbd "b") #'my/straight-backup-lockfile)  ; Backup lockfile
+  (define-key my/package-map (kbd "R") #'my/straight-restore-lockfile) ; Restore lockfile
+  (define-key my/package-map (kbd "C") #'my/straight-commit-lockfile)  ; Commit lockfile
+  (define-key my/package-map (kbd "d") #'my/straight-diff-lockfile)    ; Diff lockfile
 #+END_SRC

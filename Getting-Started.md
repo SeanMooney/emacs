@@ -274,7 +274,8 @@ C-c j - Join/toggle window split orientation
 C-c k - Kill buffer (bury)
 C-c n - Next error (flymake)
 C-c o - Olivetti focus mode
-C-c p - Previous error (flymake)
+C-c N - Previous error (flymake)
+C-c p - Package management prefix (straight.el)
 C-c r - Replace with regexp
 C-c w - Whitespace mode toggle
 C-c W - Writegood mode toggle
@@ -633,7 +634,7 @@ This configuration is built on carefully selected packages that work together se
 #### **Flymake** - Real-time Error Checking
 - **What it does**: Shows syntax errors and warnings in real-time
 - **Why it's better**: Immediate feedback, integrates with LSP
-- **How to use**: `C-c n/p` for next/previous error
+- **How to use**: `C-c n`/`C-c N` for next/previous error
 - **Key features**: Real-time checking, multiple backends, visual indicators
 
 #### **Tree-sitter** (treesit-auto) - Advanced Syntax Parsing
