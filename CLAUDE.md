@@ -45,7 +45,7 @@ This is a personal Emacs configuration using a **literate programming** approach
 ### Package Categories
 - **Completion**: vertico, marginalia, orderless, consult, corfu, cape
 - **UI/Themes**: ef-themes, fontaine, which-key, treemacs
-- **Development**: eglot (LSP), flymake, treesit-auto, flyspell
+- **Development**: eglot (LSP), flymake, treesit-auto, flyspell, envrc
 - **Version Control**: magit, built-in VC
 - **File Management**: dired, ibuffer, project.el
 - **Terminal**: eat (modern terminal emulator)
@@ -54,6 +54,7 @@ This is a personal Emacs configuration using a **literate programming** approach
 ### Language Support
 - **Python**: pyvenv for virtual environments, ruff for linting
 - **Markdown**: markdown-mode with GitHub flavor
+- **Nix**: nix-ts-mode for expression editing
 - **Tree-sitter**: Automatic parser installation for syntax highlighting
 - **General**: All prog-mode features (LSP, completion, etc.)
 
@@ -73,6 +74,7 @@ All package configuration follows this pattern in `lit.org`:
 - `C-c f` - fontaine (font management)
 - `C-c l` - LSP/eglot commands
 - `C-c a` - claude-code commands
+- `C-c e` - envrc (environment management)
 - `C-x g` - magit-status
 
 ### File Persistence

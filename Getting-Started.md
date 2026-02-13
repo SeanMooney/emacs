@@ -44,6 +44,7 @@ Welcome to a modern, AI-enhanced Emacs configuration designed for both writing a
 - **OpenDyslexic**: For dyslexia-friendly font preset
 - **Language servers**: For your programming languages (e.g., `pyright` for Python)
 - **Spell checkers**: `aspell` or `hunspell` for enhanced spell checking
+- **direnv + nix-direnv**: For automatic Nix devshell environment loading (optional)
 
 **⚠️ Important**: If you encounter any issues, see [Troubleshooting](#troubleshooting--common-issues) section.
 
@@ -268,6 +269,7 @@ C-c x r - Restart Emacs
 C-c b - Build/compile
 C-c B - Build again (recompile)
 C-c d - Delete pair of delimiters
+C-c e - Environment commands (envrc: reload, allow, deny)
 C-c j - Join/toggle window split orientation
 C-c k - Kill buffer (bury)
 C-c n - Next error (flymake)
@@ -640,6 +642,12 @@ This configuration is built on carefully selected packages that work together se
 - **How to use**: Works automatically for supported languages
 - **Key features**: Incremental parsing, better highlighting, structural editing
 
+#### **nix-ts-mode** - Nix Expression Editing
+- **What it does**: Tree-sitter powered syntax highlighting for `.nix` files
+- **Why it's better**: Accurate AST-level parsing for Nix expressions
+- **How to use**: Opens automatically for `.nix` files
+- **Key features**: Full syntax highlighting, structural awareness
+
 #### **Magit** - Git Interface
 - **What it does**: Powerful Git interface with staging, committing, branching
 - **Why it's better**: More powerful than command line, visual workflow
@@ -691,11 +699,11 @@ This configuration is built on carefully selected packages that work together se
 
 ### **🔗 Integration Packages**
 
-#### **direnv** - Environment Management
-- **What it does**: Loads project-specific environment variables
-- **Why it's better**: Consistent environment per project
-- **How to use**: Works automatically when entering directories
-- **Key features**: Automatic loading, project isolation
+#### **envrc** - Buffer-Local Environment Management
+- **What it does**: Loads project-specific environment variables via direnv, buffer-locally
+- **Why it's better**: Each buffer gets its own environment; essential for Nix devshell workflows
+- **How to use**: Works automatically for files inside direnv-managed projects
+- **Key features**: Buffer-local isolation, Nix devshell support, `C-c e` command map for reload/allow/deny
 
 #### **editorconfig** - Consistent Code Style
 - **What it does**: Applies project-defined coding standards

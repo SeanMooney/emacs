@@ -877,7 +877,7 @@ Tree-sitter provides faster and more accurate syntax parsing, which improves hig
     (treesit-auto-install 'prompt)
     :config
     ;; Only add tree-sitter modes for languages that benefit from it
-    (treesit-auto-add-to-auto-mode-alist '(python bash javascript typescript json yaml zig))
+    (treesit-auto-add-to-auto-mode-alist '(python bash javascript typescript json yaml zig nix))
     (global-treesit-auto-mode))
 #+END_SRC
 
@@ -930,13 +930,33 @@ This section configures Zig development support with syntax highlighting, LSP in
                        (setq-local indent-tabs-mode nil))))
 #+END_SRC
 
-** Project-Specific Environment (direnv)
-`direnv` is a tool that loads and unloads environment variables depending on the current directory. This package integrates it with Emacs.
+** Language: Nix
+Nix expression file editing with tree-sitter powered syntax highlighting.
+The =nix= tree-sitter grammar will be prompted for installation on first use
+via =treesit-auto=.
 
 #+BEGIN_SRC emacs-lisp
-  (use-package direnv
+  (use-package nix-ts-mode
+    :mode "\\.nix\\'")
+#+END_SRC
+
+** Project-Specific Environment (envrc)
+=envrc= provides buffer-local environment variable management via =direnv=.
+Unlike global =direnv-mode=, each buffer gets its own environment from the
+=.envrc= file in its project root. This is essential for Nix devshells,
+where different projects may provide different tool versions.
+
+With =nix-direnv= installed on the system, Nix environment evaluations are
+cached so loads are fast after the first run. Projects just need an =.envrc=
+containing =use flake= and a =flake.nix= with a =devShells.default=.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package envrc
+    :if (executable-find "direnv")
+    :bind (:map envrc-mode-map
+           ("C-c e" . envrc-command-map))
     :config
-    (direnv-mode))
+    (envrc-global-mode))
 #+END_SRC
 
 ** Project Configuration (editorconfig)
@@ -992,6 +1012,7 @@ Custom helper functions provide integrated workflows leveraging treemacs, eat, m
                         ((file-exists-p (expand-file-name "Cargo.toml" project-root)) "cargo build")
                         ((file-exists-p (expand-file-name "pyproject.toml" project-root)) "python -m build")
                         ((file-exists-p (expand-file-name "CMakeLists.txt" project-root)) "cmake --build build")
+                        ((file-exists-p (expand-file-name "flake.nix" project-root)) "nix build")
                         (t "make"))))
       (compile compile-cmd)))
 
