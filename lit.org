@@ -724,9 +724,16 @@ Additional UI packages that help with discoverability and navigation.
 
   ;; Modern icon support for better readability
   (use-package nerd-icons
+    :defer t
     :config
-    ;; Run M-x nerd-icons-install-fonts after first install
-    (unless (find-font (font-spec :name "Symbols Nerd Font Mono"))
+    (defun my/nerd-icons-font-installed-p ()
+      "Check if Nerd Fonts are installed."
+      (or (member "Symbols Nerd Font Mono" (font-family-list))
+          (member "Nerd Icons" (font-family-list))))
+
+    ;; Prompt to install fonts on non-NixOS systems
+    (unless (or (my/nerd-icons-font-installed-p)
+                (file-exists-p "/etc/NIXOS"))
       (when (y-or-n-p "Nerd fonts not found. Install them? ")
         (nerd-icons-install-fonts))))
 
