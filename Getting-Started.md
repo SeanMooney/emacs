@@ -10,6 +10,7 @@ Welcome to a modern, AI-enhanced Emacs configuration designed for both writing a
 - [Your First 10 Minutes](#your-first-10-minutes)
 - [Basic Workflows](#basic-workflows)
 - [AI Integration Guide](#ai-integration-guide)
+- [Knowledge Management (Org-roam)](#knowledge-management-org-roam)
 - [Migration Guide: Coming from Other Editors](#migration-guide-coming-from-other-editors)
 - [Troubleshooting & Common Issues](#troubleshooting--common-issues)
 - [Customization & Next Steps](#customization--next-steps)
@@ -378,6 +379,62 @@ C-h v - Helpful variable (enhanced variable help)
 C-h k - Helpful key (enhanced key help)
 C-h x - Helpful command (enhanced command help)
 ```
+
+## Knowledge Management (Org-roam)
+
+Org-roam provides a non-hierarchical, Zettelkasten-style note-taking system built on Org-mode.
+
+### **Prerequisites**
+
+Org-roam requires a notes vault at `~/repos/notes`. When this directory is absent (e.g. on a
+machine where the vault hasn't been cloned), org-roam is silently skipped — Emacs starts without
+errors and the `C-c n` bindings are simply not registered.
+
+To set up the vault on a new machine:
+```bash
+git clone <your-notes-repo> ~/repos/notes
+```
+
+### **Vault Structure**
+
+Notes are organized into two subdirectories within `~/repos/notes`:
+
+| Directory | Purpose | Capture key |
+|-----------|---------|-------------|
+| `public/` | Notes safe to share or publish | `p` |
+| `private/` | Personal notes, drafts, sensitive content | `r` |
+
+Each note is a plain `.org` file with a timestamp-based filename
+(`YYYYMMDDTHHMMSS-<slug>.org`) and auto-generated front matter.
+
+### **Key Bindings** (`C-c n` prefix — "notes")
+
+| Key | Command | Description |
+|-----|---------|-------------|
+| `C-c n f` | `org-roam-node-find` | Jump to or create a node by title |
+| `C-c n i` | `org-roam-node-insert` | Insert a link to another node |
+| `C-c n c` | `org-roam-capture` | Capture a new note (prompts for template) |
+| `C-c n l` | `org-roam-buffer-toggle` | Toggle the backlinks buffer |
+| `C-c n g` | `org-roam-graph` | Open the knowledge graph |
+
+### **Database Sync**
+
+The org-roam SQLite database (`.org-roam.db` inside the vault) is kept in sync automatically
+via `org-roam-db-autosync-mode`. No manual `M-x org-roam-db-sync` is needed after the initial
+setup.
+
+### **Vault Sync (Auto-commit & Push)**
+
+Every save of a file inside `~/repos/notes` automatically creates a git commit and pushes it
+to the remote, powered by `git-auto-commit-mode`.
+
+| Behaviour | Detail |
+|-----------|--------|
+| Trigger | On every `C-x C-s` (or any save) inside `~/repos/notes` |
+| Commit message | Auto-generated (no prompt) |
+| Push | Automatic — changes appear on remote immediately |
+| Activation | Via `find-file-hook`; no `.dir-locals.el` needed in the vault |
+| Absent vault | Package is silently skipped — no errors on machines without the vault |
 
 ## Keybinding Design Philosophy
 

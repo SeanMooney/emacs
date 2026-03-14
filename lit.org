@@ -1233,6 +1233,56 @@ model with relevant information about the project you're working on.
                    (side . right)
                    (window-width . 0.33))))
 #+END_SRC
+* Knowledge Management
+** Org-roam
+Org-roam provides a non-hierarchical note-taking system built on top of Org-mode. It is only
+loaded when the notes vault directory (~~/repos/notes~) exists, so machines without the vault
+start cleanly with no errors and no ~C-c n~ bindings.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package org-roam
+    :if (file-directory-p (expand-file-name "~/repos/notes"))
+    :custom
+    (org-roam-directory (expand-file-name "~/repos/notes"))
+    (org-roam-db-location (expand-file-name "~/repos/notes/.org-roam.db"))
+    (org-roam-capture-templates
+     '(("p" "public" plain "%?"
+        :target (file+head "public/%<%Y%m%d%T>-${slug}.org"
+                           "#+title: ${title}\n#+filetags: :public:\n")
+        :unnarrowed t)
+       ("r" "private" plain "%?"
+        :target (file+head "private/%<%Y%m%d%T>-${slug}.org"
+                           "#+title: ${title}\n#+filetags: :private:\n")
+        :unnarrowed t)))
+    :bind (("C-c n f" . org-roam-node-find)
+           ("C-c n i" . org-roam-node-insert)
+           ("C-c n c" . org-roam-capture)
+           ("C-c n l" . org-roam-buffer-toggle)
+           ("C-c n g" . org-roam-graph))
+    :config
+    (org-roam-db-autosync-mode))
+#+END_SRC
+** Vault Sync
+Automatically commit and push every saved note to the remote git repository, keeping the vault
+in sync across machines. The hook activates ~git-auto-commit-mode~ on any file visited inside
+~org-roam-directory~, so no ~.dir-locals.el~ is needed in the vault itself. The package is
+skipped entirely when the vault directory is absent.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package git-auto-commit-mode
+    :if (file-directory-p (expand-file-name "~/repos/notes"))
+    :custom
+    (gac-automatically-push-p t)
+    (gac-ask-for-summary-p nil)
+    :config
+    (add-hook 'find-file-hook
+              (lambda ()
+                (when (and (bound-and-true-p org-roam-directory)
+                           (buffer-file-name)
+                           (string-prefix-p (expand-file-name org-roam-directory)
+                                            (expand-file-name (buffer-file-name))))
+                  (git-auto-commit-mode 1)))))
+#+END_SRC
 * Custom Commands & Bindings
 This section is for custom functions and global keybindings that don't belong to a specific package.
 
