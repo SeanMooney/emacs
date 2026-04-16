@@ -191,11 +191,16 @@ This configuration uses a systematic approach to keybindings with clear mnemonic
 
 The `C-c` prefix is reserved for user customizations in Emacs. This configuration organizes them with clear mnemonics:
 
-#### **C-c a** - **A**ssistant (Claude Code Integration)
+#### **C-c a** - **A**I Terminal Launcher
 ```
-C-c a [various] - Claude Code command map
+C-c a c - Launch Claude Code (per-project, reuses existing session)
+C-c a o - Launch OpenCode
+C-c a d - Launch Factory.ai Droid
+C-c a t - Toggle AI terminal side window
+C-c a s - Send command string to AI terminal
 ```
-*Mnemonic: "Assistant" - Direct Claude Code interface*
+*Mnemonic: "AI/Assistant" - Launch and control AI coding tools in a right-side terminal*
+*Backend is configurable: ghostel (default), eat, or ansi-term*
 
 #### **C-c f** - **F**onts
 ```
@@ -254,8 +259,10 @@ C-c s p - check Project
 C-c t s - Shell
 C-c t e - Eshell
 C-c t t - Terminal (eat)
+C-c t g - Terminal (ghostel)
+C-c t G - Project terminal (ghostel)
 C-c t a - Ansi-term
-C-c t p - Project terminal
+C-c t p - Project terminal (eat)
 ```
 *Mnemonic: "Terminal" - All shell/terminal interfaces*
 

@@ -651,7 +651,7 @@ Additional UI packages that help with discoverability and navigation.
     ;; Show source code for elisp functions
     (helpful-switch-buffer-function #'helpful-switch-to-buffer))
 
-  ;; Transient menu framework (required for claude-code)
+  ;; Transient menu framework (used by magit, gptel, and other packages)
   (use-package transient
     :straight t)
 
@@ -993,7 +993,7 @@ Custom helper functions provide integrated workflows leveraging treemacs, eat, m
 #+BEGIN_SRC emacs-lisp
   ;; Custom project helper functions
   (defun my/project-workspace-setup ()
-    "Setup 2-pane workspace: dired on left, eat terminal on right (50:50 split)."
+    "Setup 2-pane workspace: dired on left, ghostel terminal on right (50:50 split)."
     (interactive)
     (let ((project-root (project-root (project-current))))
       ;; Close treemacs if it's loaded and has a workspace
@@ -1009,7 +1009,7 @@ Custom helper functions provide integrated workflows leveraging treemacs, eat, m
       (split-window-right)
       ;; Move to right pane and open terminal
       (other-window 1)
-      (eat-project)
+      (ghostel-project)
       ;; Terminal should be the active buffer (already is from other-window)
       ))
 
@@ -1075,6 +1075,7 @@ Custom helper functions provide integrated workflows leveraging treemacs, eat, m
            ("C-x p g" . project-find-regexp)
            ("C-x p d" . project-find-dir)
            ("C-x p t" . eat-project)      ; Modern terminal for project
+           ("C-x p G" . ghostel-project)  ; Ghostty-powered terminal for project
            ("C-x p a" . ansi-term))       ; Alternative terminal option
     :custom
     ;; Enhanced project switching menu with streamlined, logically grouped actions
@@ -1089,6 +1090,7 @@ Custom helper functions provide integrated workflows leveraging treemacs, eat, m
        (my/consult-project-ripgrep "Search project" ?s)
        ;; Development Workflow
        (eat-project "Terminal" ?t)
+       (ghostel-project "Ghostty terminal" ?G)
        (magit-status "Git status" ?g)
        (my/project-smart-compile "Compile" ?c)
        ;; Layout & Cleanup
@@ -1125,6 +1127,18 @@ Terminal commands are bound under the `C-c t` prefix to avoid conflicts with spe
                         ;; Disable visual features that interfere with terminal display
                         (hl-line-mode -1)
                         (pulsar-mode -1))))
+
+  ;; ghostel: fast terminal emulator powered by libghostty-vt (same engine as Ghostty).
+  ;; Native module is auto-downloaded on first use.
+  (use-package ghostel
+    :straight (:host github :repo "dakra/ghostel")
+    :bind (("C-c t g" . ghostel)
+           ("C-c t G" . ghostel-project))
+    :hook (ghostel-mode . (lambda ()
+                            (setq-local scroll-conservatively most-positive-fixnum)
+                            (setq-local scroll-margin 0)
+                            (hl-line-mode -1)
+                            (pulsar-mode -1))))
 #+END_SRC
 
 * GPT & AI
@@ -1211,27 +1225,235 @@ model with relevant information about the project you're working on.
     (require 'mcp-hub))
 #+END_SRC
 
-** claude-code
+** AI Terminal Launcher
+Lightweight replacement for ~claude-code.el~. Launches AI coding tools (Claude, OpenCode,
+Aider) in a right-side terminal panel at ~30% width, with per-project instance tracking.
+The terminal backend is configurable: ghostel (default), eat, or ansi-term.
+
+Ghostel note: ghostel always starts a shell rather than an arbitrary program directly.
+The launcher creates a ghostel shell buffer in the project directory, then sends the
+program command to it after a short delay.
 
 #+BEGIN_SRC emacs-lisp
-  (use-package claude-code
-    :straight (:type git :host github :repo "stevemolitor/claude-code.el" :branch "main"
-               :files ("*.el" (:exclude "demo.gif")))
-    :bind-keymap
-    ("C-c a" . claude-code-command-map)  ; Choose your preferred prefix
-    :custom
-    ;; Configure to use claude installation from PATH
-    (claude-code-program (or (executable-find "claude")
-                             (executable-find "claude-code")
-                             "claude"))
-    :config
-    (claude-code-mode)
-    ;; Configure for your wide screen setup
-    (add-to-list 'display-buffer-alist
-                 '("^\\*claude"
-                   (display-buffer-in-side-window)
+  ;;; --- Configuration ---
+
+  (defcustom my/ai-term-backend 'ghostel
+    "Terminal backend to use for AI tools: ghostel, eat, or ansi-term."
+    :type '(radio (const ghostel) (const eat) (const ansi-term))
+    :group 'tools)
+
+  (defcustom my/ai-term-window-width 0.30
+    "Width of the AI terminal side window as a fraction of the frame."
+    :type 'number
+    :group 'tools)
+
+  (defcustom my/ai-term-ghostel-delay 0.3
+    "Seconds to wait after ghostel shell starts before sending the AI program command."
+    :type 'number
+    :group 'tools)
+
+  ;;; --- Internal helpers ---
+
+  (defun my/ai-term--directory ()
+    "Return the working directory for the AI tool.
+  Prefers project root, then the buffer file's directory, then `default-directory'."
+    (or (when (project-current) (project-root (project-current)))
+        (when buffer-file-name (file-name-directory buffer-file-name))
+        default-directory))
+
+  (defun my/ai-term--project-name (dir)
+    "Return the short project name for DIR (last path component)."
+    (file-name-nondirectory (directory-file-name (file-truename dir))))
+
+  (defun my/ai-term--buffer-name (tool dir)
+    "Return the buffer name for TOOL running in DIR: *<project>-<tool>*."
+    (format "*%s-%s*" (my/ai-term--project-name dir) tool))
+
+  (defun my/ai-term--buffer-alive-p (buf)
+    "Return non-nil if BUF has a live terminal process."
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (pcase my/ai-term-backend
+          ('ghostel   (and (boundp 'ghostel--process) ghostel--process
+                           (process-live-p ghostel--process)))
+          ('eat       (and (boundp 'eat-terminal) eat-terminal
+                           (eat-term-live-p eat-terminal)))
+          ('ansi-term (get-buffer-process buf))))))
+
+  (defun my/ai-term--display (buf)
+    "Display BUF in a right-side window at `my/ai-term-window-width'."
+    (let ((win (display-buffer buf
+                 `((display-buffer-in-side-window)
                    (side . right)
-                   (window-width . 0.33))))
+                   (window-width . ,my/ai-term-window-width)))))
+      (when win
+        (set-window-parameter win 'left-fringe-width 0)
+        (set-window-parameter win 'right-fringe-width 0))
+      win))
+
+  (defun my/ai-term--find-project-buffer (dir)
+    "Find any live AI terminal buffer for DIR, regardless of tool.
+  Matches buffers named *<project>-<tool>* where project is derived from DIR."
+    (let ((project-name (my/ai-term--project-name dir)))
+      (seq-find
+       (lambda (b)
+         (string-match-p
+          (format "^\\*%s-[^*]+\\*$" (regexp-quote project-name))
+          (buffer-name b)))
+       (buffer-list))))
+
+  ;;; --- Backend implementations ---
+
+  (defun my/ai-term--ensure-ghostel-module ()
+    "Ensure the ghostel native module is loaded, prompting to install if needed."
+    (unless (fboundp 'ghostel--new)
+      (let ((dir (file-name-directory (locate-library "ghostel"))))
+        (ghostel--ensure-module dir)
+        (let ((mod (expand-file-name
+                    (concat "ghostel-module" module-file-suffix) dir)))
+          (unless (file-exists-p mod)
+            (user-error "Ghostel native module not available; run M-x ghostel-download-module"))
+          (module-load mod)))))
+
+  (defun my/ai-term--make-ghostel (buf-name dir program)
+    "Create a fresh ghostel terminal buffer BUF-NAME in DIR, then send PROGRAM.
+  Initialises the ghostel buffer directly (without calling `ghostel') so that
+  the existing project ghostel terminal window is not disturbed."
+    (my/ai-term--ensure-ghostel-module)
+    ;; Caller has already killed any stale buffer; create fresh.
+    (let ((buf (get-buffer-create buf-name)))
+      (with-current-buffer buf
+        (let ((default-directory dir)
+              (ghostel-kill-buffer-on-exit nil))
+          (ghostel-mode)
+          (setq ghostel--managed-buffer-name (buffer-name))
+          ;; Start with default dimensions; the window-size hook will resize
+          ;; correctly once the buffer is displayed in a side window.
+          (setq ghostel--term (ghostel--new 24 80 ghostel-max-scrollback))
+          (setq ghostel--term-rows 24)
+          (ghostel--apply-palette ghostel--term)
+          (ghostel--start-process)))
+      ;; Send the AI program name to the shell after it is ready.
+      (run-with-timer my/ai-term-ghostel-delay nil
+        (lambda (b p)
+          (when (buffer-live-p b)
+            (with-current-buffer b
+              (when (and (boundp 'ghostel--process) ghostel--process
+                         (process-live-p ghostel--process))
+                (process-send-string ghostel--process (concat p "\n"))))))
+        buf program)
+      buf))
+
+  (defun my/ai-term--make-eat (buf-name dir program)
+    "Create an eat terminal buffer BUF-NAME in DIR running PROGRAM directly."
+    (let ((default-directory dir))
+      (eat-make (string-trim buf-name "*") program)))
+
+  (defun my/ai-term--make-ansi-term (buf-name dir program)
+    "Create an ansi-term buffer BUF-NAME in DIR running PROGRAM."
+    (let ((default-directory dir))
+      (with-current-buffer (ansi-term program (string-trim buf-name "*"))
+        (current-buffer))))
+
+  (defun my/ai-term--make-buffer (buf-name dir program)
+    "Dispatch buffer creation to the configured backend."
+    (pcase my/ai-term-backend
+      ('ghostel   (my/ai-term--make-ghostel   buf-name dir program))
+      ('eat       (my/ai-term--make-eat       buf-name dir program))
+      ('ansi-term (my/ai-term--make-ansi-term buf-name dir program))
+      (_ (error "Unknown my/ai-term-backend: %s" my/ai-term-backend))))
+
+  ;;; --- Core launch ---
+
+  (defun my/ai-term-launch (tool program)
+    "Launch PROGRAM as TOOL in the configured terminal.
+  Reuses an existing live per-project buffer if one exists.
+  Kills a stale (dead-process) buffer and starts fresh."
+    (let* ((dir (my/ai-term--directory))
+           (buf-name (my/ai-term--buffer-name tool dir))
+           (existing (get-buffer buf-name)))
+      (cond
+       ;; Existing live instance — just show it
+       ((and existing (my/ai-term--buffer-alive-p existing))
+        (my/ai-term--display existing))
+       ;; Stale buffer — clean up and restart
+       (t
+        (when existing (kill-buffer existing))
+        (let ((buf (my/ai-term--make-buffer buf-name dir program)))
+          (when buf (my/ai-term--display buf))
+          buf)))))
+
+  ;;; --- Toggle ---
+
+  (defun my/ai-term-toggle ()
+    "Toggle the AI terminal side window for the current project.
+  If the window is visible, close it.  If a buffer exists but is hidden,
+  show it.  Does nothing if no AI terminal has been started."
+    (interactive)
+    (let* ((dir (my/ai-term--directory))
+           (buf (my/ai-term--find-project-buffer dir)))
+      (cond
+       ((and buf (get-buffer-window buf))
+        (delete-window (get-buffer-window buf)))
+       (buf
+        (my/ai-term--display buf))
+       (t
+        (message "No AI terminal running for this project")))))
+
+  ;;; --- Send commands ---
+
+  (defun my/ai-term--send (buf string)
+    "Send STRING followed by a newline to AI terminal BUF."
+    (with-current-buffer buf
+      (pcase my/ai-term-backend
+        ('ghostel
+         (when (and (boundp 'ghostel--process) ghostel--process
+                    (process-live-p ghostel--process))
+           (process-send-string ghostel--process (concat string "\n"))))
+        ('eat
+         (when (and (boundp 'eat-terminal) eat-terminal)
+           (eat-term-send-string eat-terminal (concat string "\n"))))
+        ('ansi-term
+         (term-send-raw-string (concat string "\n"))))))
+
+  (defun my/ai-term-send-command ()
+    "Prompt for a string and send it to the current project's AI terminal."
+    (interactive)
+    (let ((buf (my/ai-term--find-project-buffer (my/ai-term--directory))))
+      (if buf
+          (my/ai-term--send buf (read-string "Send to AI: "))
+        (message "No AI terminal running for this project"))))
+
+  ;;; --- Tool launchers ---
+
+  (defun my/claude ()
+    "Launch Claude Code in the current project's AI terminal."
+    (interactive)
+    (my/ai-term-launch "claude" (or (executable-find "claude") "claude")))
+
+  (defun my/opencode ()
+    "Launch OpenCode in the current project's AI terminal."
+    (interactive)
+    (my/ai-term-launch "opencode" (or (executable-find "opencode") "opencode")))
+
+  (defun my/droid ()
+    "Launch Factory.ai Droid in the current project's AI terminal."
+    (interactive)
+    (my/ai-term-launch "droid" (or (executable-find "droid") "droid")))
+
+  ;;; --- Keymap ---
+
+  (defvar my/ai-term-map
+    (let ((m (make-sparse-keymap)))
+      (define-key m (kbd "c") #'my/claude)
+      (define-key m (kbd "o") #'my/opencode)
+      (define-key m (kbd "d") #'my/droid)
+      (define-key m (kbd "t") #'my/ai-term-toggle)
+      (define-key m (kbd "s") #'my/ai-term-send-command)
+      m)
+    "Keymap for AI terminal launcher commands, bound to \\[my/ai-term-map].")
+
+  (global-set-key (kbd "C-c a") my/ai-term-map)
 #+END_SRC
 * Knowledge Management
 ** Org-roam
