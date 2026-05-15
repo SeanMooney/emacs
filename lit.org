@@ -1231,7 +1231,7 @@ model with relevant information about the project you're working on.
 
 ** AI Terminal Launcher
 Lightweight replacement for ~claude-code.el~. Launches AI coding tools (Claude, OpenCode,
-Aider) in a right-side terminal panel at ~30% width, with per-project instance tracking.
+Droid, Pi) in a right-side terminal panel at ~30% width, with per-project instance tracking.
 The terminal backend is configurable: ghostel (default), eat, or ansi-term.
 
 Ghostel note: ghostel always starts a shell rather than an arbitrary program directly.
@@ -1445,6 +1445,17 @@ program command to it after a short delay.
     (interactive)
     (my/ai-term-launch "droid" (or (executable-find "droid") "droid")))
 
+  (defun my/pi ()
+    "Launch Pi in the current project's AI terminal."
+    (interactive)
+    (my/ai-term-launch "pi" (or (executable-find "pi") "pi")))
+
+  (defun my/pi-no-sandbox ()
+    "Launch Pi with --no-sandbox in the current project's AI terminal."
+    (interactive)
+    (my/ai-term-launch "pi-no-sandbox"
+                       (concat (or (executable-find "pi") "pi") " --no-sandbox")))
+
   ;;; --- Keymap ---
 
   (defvar my/ai-term-map
@@ -1452,6 +1463,8 @@ program command to it after a short delay.
       (define-key m (kbd "c") #'my/claude)
       (define-key m (kbd "o") #'my/opencode)
       (define-key m (kbd "d") #'my/droid)
+      (define-key m (kbd "p") #'my/pi)
+      (define-key m (kbd "P") #'my/pi-no-sandbox)
       (define-key m (kbd "t") #'my/ai-term-toggle)
       (define-key m (kbd "s") #'my/ai-term-send-command)
       m)
