@@ -731,8 +731,12 @@ Additional UI packages that help with discoverability and navigation.
       (or (member "Symbols Nerd Font Mono" (font-family-list))
           (member "Nerd Icons" (font-family-list))))
 
-    ;; Prompt to install fonts on non-NixOS systems
-    (unless (or (my/nerd-icons-font-installed-p)
+    ;; Run M-x nerd-icons-install-fonts after first install.  Keep the
+    ;; interactive check for normal startup, but avoid prompting in batch mode
+    ;; where there is no stdin to answer the question.  Also skip the prompt on
+    ;; NixOS, where fonts should be installed declaratively.
+    (unless (or noninteractive
+                (my/nerd-icons-font-installed-p)
                 (file-exists-p "/etc/NIXOS"))
       (when (y-or-n-p "Nerd fonts not found. Install them? ")
         (nerd-icons-install-fonts))))

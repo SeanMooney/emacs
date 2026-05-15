@@ -20,6 +20,31 @@
   (add-to-list 'native-comp-eln-load-path (expand-file-name "eln-cache/" user-emacs-directory)))
 
 
+;; Bootstrap straight.el before loading Org.  `org-babel-load-file' would
+;; otherwise load Emacs' built-in Org first, then straight.el may later load a
+;; newer Org checkout, causing repeated "Org version mismatch" warnings.
+(setq straight-use-package-by-default t)
+
+(defvar bootstrap-version)
+(let ((bootstrap-file
+       (expand-file-name "straight/repos/straight.el/bootstrap.el"
+                         (or (bound-and-true-p straight-base-dir)
+                             user-emacs-directory)))
+      (bootstrap-version 7))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
+
+(straight-use-package 'use-package)
+(require 'use-package)
+(straight-use-package-mode 1)
+(straight-use-package 'org)
+
 ;; load org package and our lit.org file
 (require 'org)
 (org-babel-load-file (expand-file-name "lit.org" user-emacs-directory))
