@@ -1308,16 +1308,27 @@ program command to it after a short delay.
 
   ;;; --- Backend implementations ---
 
+  (defun my/ai-term--shell-command (program)
+    "Return PROGRAM as a shell command string.
+  PROGRAM may be a string or a list of program/argument strings."
+    (if (listp program)
+        (mapconcat #'shell-quote-argument program " ")
+      program))
+
   (defun my/ai-term--ensure-ghostel-module ()
-    "Ensure the ghostel native module is loaded, prompting to install if needed."
-    (unless (fboundp 'ghostel--new)
+    "Ensure ghostel and its native module are loaded."
+    (require 'ghostel)
+    ;; Newer ghostel exposes `ghostel--load-module'; older versions used
+    ;; `ghostel--ensure-module'.  Prefer the current entry point because it
+    ;; handles downloading/building the sidecar module correctly.
+    (cond
+     ((fboundp 'ghostel--load-module)
+      (ghostel--load-module t))
+     ((fboundp 'ghostel--ensure-module)
       (let ((dir (file-name-directory (locate-library "ghostel"))))
-        (ghostel--ensure-module dir)
-        (let ((mod (expand-file-name
-                    (concat "ghostel-module" module-file-suffix) dir)))
-          (unless (file-exists-p mod)
-            (user-error "Ghostel native module not available; run M-x ghostel-download-module"))
-          (module-load mod)))))
+        (ghostel--ensure-module dir)))
+     ((not (fboundp 'ghostel--new))
+      (user-error "Ghostel native module loader is not available; try M-x ghostel"))))
 
   (defun my/ai-term--make-ghostel (buf-name dir program)
     "Create a fresh ghostel terminal buffer BUF-NAME in DIR, then send PROGRAM.
@@ -1329,13 +1340,13 @@ program command to it after a short delay.
       (with-current-buffer buf
         (let ((default-directory dir)
               (ghostel-kill-buffer-on-exit nil))
-          (ghostel-mode)
+          ;; Use ghostel's own buffer initialisation helper instead of
+          ;; constructing `ghostel--term' by hand.  The internal API changed in
+          ;; newer ghostel versions, and this keeps the launcher aligned with
+          ;; ghostel's required buffer-local state.
+          (ghostel--init-buffer buf 24 80)
           (setq ghostel--managed-buffer-name (buffer-name))
-          ;; Start with default dimensions; the window-size hook will resize
-          ;; correctly once the buffer is displayed in a side window.
-          (setq ghostel--term (ghostel--new 24 80 ghostel-max-scrollback))
-          (setq ghostel--term-rows 24)
-          (ghostel--apply-palette ghostel--term)
+          (setq ghostel--buffer-identity (buffer-name))
           (ghostel--start-process)))
       ;; Send the AI program name to the shell after it is ready.
       (run-with-timer my/ai-term-ghostel-delay nil
@@ -1344,19 +1355,22 @@ program command to it after a short delay.
             (with-current-buffer b
               (when (and (boundp 'ghostel--process) ghostel--process
                          (process-live-p ghostel--process))
-                (process-send-string ghostel--process (concat p "\n"))))))
+                (process-send-string ghostel--process
+                                     (concat (my/ai-term--shell-command p) "\n"))))))
         buf program)
       buf))
 
   (defun my/ai-term--make-eat (buf-name dir program)
-    "Create an eat terminal buffer BUF-NAME in DIR running PROGRAM directly."
-    (let ((default-directory dir))
-      (eat-make (string-trim buf-name "*") program)))
+    "Create an eat terminal buffer BUF-NAME in DIR running PROGRAM."
+    (let* ((default-directory dir)
+           (argv (if (listp program) program (list shell-file-name shell-command-switch program))))
+      (apply #'eat-make (string-trim buf-name "*") (car argv) nil (cdr argv))))
 
   (defun my/ai-term--make-ansi-term (buf-name dir program)
     "Create an ansi-term buffer BUF-NAME in DIR running PROGRAM."
     (let ((default-directory dir))
-      (with-current-buffer (ansi-term program (string-trim buf-name "*"))
+      (with-current-buffer (ansi-term shell-file-name (string-trim buf-name "*"))
+        (term-send-raw-string (concat (my/ai-term--shell-command program) "\n"))
         (current-buffer))))
 
   (defun my/ai-term--make-buffer (buf-name dir program)
@@ -1454,7 +1468,7 @@ program command to it after a short delay.
     "Launch Pi with --no-sandbox in the current project's AI terminal."
     (interactive)
     (my/ai-term-launch "pi-no-sandbox"
-                       (concat (or (executable-find "pi") "pi") " --no-sandbox")))
+                       (list (or (executable-find "pi") "pi") "--no-sandbox")))
 
   ;;; --- Keymap ---
 

@@ -196,6 +196,8 @@ The `C-c` prefix is reserved for user customizations in Emacs. This configuratio
 C-c a c - Launch Claude Code (per-project, reuses existing session)
 C-c a o - Launch OpenCode
 C-c a d - Launch Factory.ai Droid
+C-c a p - Launch Pi
+C-c a P - Launch Pi with --no-sandbox
 C-c a t - Toggle AI terminal side window
 C-c a s - Send command string to AI terminal
 ```
@@ -590,11 +592,11 @@ This configuration is built on carefully selected packages that work together se
 - **How to use**: Works automatically with AI functions
 - **Key features**: File system access, project awareness, RAG capabilities
 
-#### **claude-code** - Direct Claude Integration
-- **What it does**: Native Claude Code interface within Emacs
-- **Why it's better**: Seamless integration, side-window display
-- **How to use**: `C-c a` prefix for all Claude Code commands
-- **Key features**: Split-window display, conversation history
+#### **AI Terminal Launcher** - Coding Assistant Terminals
+- **What it does**: Launches Claude Code, OpenCode, Droid, or Pi in a per-project side terminal
+- **Why it's better**: Reuses project sessions without requiring a dedicated Emacs package for each tool
+- **How to use**: `C-c a` prefix for AI terminal commands
+- **Key features**: Right-side display, project-specific buffers, configurable backend (`ghostel`, `eat`, or `ansi-term`)
 
 ### **✍️ Writing & Language Tools**
 
