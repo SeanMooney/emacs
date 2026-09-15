@@ -75,5 +75,5 @@
  ("with-editor" . "5021ef6885381cf5b2852f7a3f67ca8c4be1dca2")
  ("writegood-mode" . "d54eadeedb8bf3aa0e0a584c0a7373c69644f4b8")
  ("xref" . "425b6714a68aa7db21d0257a8a86e8908e0bf59a")
- ("zig-mode" . "20e395f940afe1e19e965050b0284ec418d6a9d5"))
+ ("zig-mode" . "62bfbaced0222e2bfbc086fa8556adf6b3298476"))
 :epsilon
