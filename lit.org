@@ -262,6 +262,9 @@ Additional packages that enhance the text editing experience beyond built-in fun
 This configures how Emacs handles files, symlinks, and saving state.
 
 #+BEGIN_SRC emacs-lisp
+  ;; Prompt inside Emacs when decrypting files such as auth-source credentials.
+  (setq epa-pinentry-mode 'loopback)
+
   (use-package files
     :ensure nil
     :straight (:type built-in)
@@ -1150,11 +1153,14 @@ Lightweight replacement for ~claude-code.el~. Launches AI coding tools (Claude, 
 Droid, Pi) in a right-side terminal panel at ~30% width, with per-project instance tracking.
 The terminal backend is configurable: ghostel (default), eat, or ansi-term.
 
-Ghostel note: ghostel always starts a shell rather than an arbitrary program directly.
-The launcher creates a ghostel shell buffer in the project directory, then sends the
-program command to it after a short delay.
+Ghostel launches its supported shell entry point, preserving Ghostel shell integration
+and the target buffer's environment.  The command is sent through Ghostel's public
+input API as soon as the shell process is created; no readiness timer is used.
 
 #+BEGIN_SRC emacs-lisp
+  ;; Also install this helper on machines without envrc/direnv.
+  (use-package inheritenv :defer t)
+
   ;;; --- Configuration ---
 
   (defcustom my/ai-term-backend 'ghostel
@@ -1167,12 +1173,13 @@ program command to it after a short delay.
     :type 'number
     :group 'tools)
 
-  (defcustom my/ai-term-ghostel-delay 0.3
-    "Seconds to wait after ghostel shell starts before sending the AI program command."
-    :type 'number
-    :group 'tools)
-
   ;;; --- Internal helpers ---
+
+  ;; These values identify launcher-owned buffers.  Buffer names are only
+  ;; cosmetic; the full target directory and TRAMP prefix are the session key.
+  (defvar-local my/ai-term-directory-identity nil)
+  (defvar-local my/ai-term-tool nil)
+  (defvar-local my/ai-term-originating-backend nil)
 
   (defun my/ai-term--directory ()
     "Return the working directory for the AI tool.
@@ -1181,24 +1188,51 @@ program command to it after a short delay.
         (when buffer-file-name (file-name-directory buffer-file-name))
         default-directory))
 
+  (defun my/ai-term--directory-identity (dir)
+    "Return the complete local or remote identity for target directory DIR."
+    (let ((directory (file-name-as-directory (expand-file-name dir))))
+      (list :directory directory :remote (file-remote-p directory))))
+
   (defun my/ai-term--project-name (dir)
-    "Return the short project name for DIR (last path component)."
-    (file-name-nondirectory (directory-file-name (file-truename dir))))
+    "Return the short, cosmetic project name for DIR."
+    (file-name-nondirectory (directory-file-name (expand-file-name dir))))
 
   (defun my/ai-term--buffer-name (tool dir)
-    "Return the buffer name for TOOL running in DIR: *<project>-<tool>*."
-    (format "*%s-%s*" (my/ai-term--project-name dir) tool))
+    "Return a cosmetic, identity-distinct buffer name for TOOL in DIR."
+    (let* ((identity (my/ai-term--directory-identity dir))
+           (digest (substring (secure-hash 'sha1 (prin1-to-string identity)) 0 10)))
+      (format "*AI %s:%s@%s*" tool (my/ai-term--project-name dir) digest)))
 
   (defun my/ai-term--buffer-alive-p (buf)
-    "Return non-nil if BUF has a live terminal process."
-    (when (buffer-live-p buf)
-      (with-current-buffer buf
-        (pcase my/ai-term-backend
-          ('ghostel   (and (boundp 'ghostel--process) ghostel--process
-                           (process-live-p ghostel--process)))
-          ('eat       (and (boundp 'eat-terminal) eat-terminal
-                           (eat-term-live-p eat-terminal)))
-          ('ansi-term (get-buffer-process buf))))))
+    "Return non-nil if BUF has a live terminal lifecycle process."
+    (and (buffer-live-p buf)
+         (let ((process (get-buffer-process buf)))
+           (and process (process-live-p process)))))
+
+  (defun my/ai-term--owned-buffer-p (buf identity &optional tool)
+    "Return non-nil if BUF is an owned AI terminal for IDENTITY and TOOL."
+    (and (buffer-live-p buf)
+         (with-current-buffer buf
+           (and (local-variable-p 'my/ai-term-directory-identity buf)
+                (equal my/ai-term-directory-identity identity)
+                (or (null tool) (equal my/ai-term-tool tool))))))
+
+  (defun my/ai-term--find-buffer (dir &optional tool live-only)
+    "Find an owned AI terminal for DIR and optional TOOL.
+  When LIVE-ONLY is non-nil, only return a buffer with a live process."
+    (let ((identity (my/ai-term--directory-identity dir)))
+      (seq-find (lambda (buf)
+                  (and (my/ai-term--owned-buffer-p buf identity tool)
+                       (or (not live-only) (my/ai-term--buffer-alive-p buf))))
+                (buffer-list))))
+
+  (defun my/ai-term--tag-buffer (buf identity tool backend)
+    "Record the owning session identity, TOOL, and BACKEND in BUF."
+    (with-current-buffer buf
+      (setq-local my/ai-term-directory-identity identity)
+      (setq-local my/ai-term-tool tool)
+      (setq-local my/ai-term-originating-backend backend))
+    buf)
 
   (defun my/ai-term--display (buf)
     "Display BUF in a right-side window at `my/ai-term-window-width'."
@@ -1211,17 +1245,6 @@ program command to it after a short delay.
         (set-window-parameter win 'right-fringe-width 0))
       win))
 
-  (defun my/ai-term--find-project-buffer (dir)
-    "Find any live AI terminal buffer for DIR, regardless of tool.
-  Matches buffers named *<project>-<tool>* where project is derived from DIR."
-    (let ((project-name (my/ai-term--project-name dir)))
-      (seq-find
-       (lambda (b)
-         (string-match-p
-          (format "^\\*%s-[^*]+\\*$" (regexp-quote project-name))
-          (buffer-name b)))
-       (buffer-list))))
-
   ;;; --- Backend implementations ---
 
   (defun my/ai-term--shell-command (program)
@@ -1231,101 +1254,93 @@ program command to it after a short delay.
         (mapconcat #'shell-quote-argument program " ")
       program))
 
-  (defun my/ai-term--ensure-ghostel-module ()
-    "Ensure ghostel and its native module are loaded."
-    (require 'ghostel)
-    ;; Newer ghostel exposes `ghostel--load-module'; older versions used
-    ;; `ghostel--ensure-module'.  Prefer the current entry point because it
-    ;; handles downloading/building the sidecar module correctly.
-    (cond
-     ((fboundp 'ghostel--load-module)
-      (ghostel--load-module t))
-     ((fboundp 'ghostel--ensure-module)
-      (let ((dir (file-name-directory (locate-library "ghostel"))))
-        (ghostel--ensure-module dir)))
-     ((not (fboundp 'ghostel--new))
-      (user-error "Ghostel native module loader is not available; try M-x ghostel"))))
+  (defun my/ai-term--backend-name (buf-name)
+    "Return a fresh backend buffer base name derived from cosmetic BUF-NAME.
+  Eat and ansi-term address buffers by name, so never let either reuse an
+  unrelated buffer which happens to have the same cosmetic label."
+    (let ((base (string-trim buf-name "\\*" "\\*"))
+          (number 2))
+      (while (get-buffer (format "*%s*" base))
+        (setq base (format "%s<%d>" (string-trim buf-name "\\*" "\\*") number)
+              number (1+ number)))
+      base))
 
   (defun my/ai-term--make-ghostel (buf-name dir program)
-    "Create a fresh ghostel terminal buffer BUF-NAME in DIR, then send PROGRAM.
-  Initialises the ghostel buffer directly (without calling `ghostel') so that
-  the existing project ghostel terminal window is not disturbed."
-    (my/ai-term--ensure-ghostel-module)
-    ;; Caller has already killed any stale buffer; create fresh.
-    (let ((buf (get-buffer-create buf-name)))
-      (with-current-buffer buf
-        (let ((default-directory dir)
-              (ghostel-kill-buffer-on-exit nil))
-          ;; Use ghostel's own buffer initialisation helper instead of
-          ;; constructing `ghostel--term' by hand.  The internal API changed in
-          ;; newer ghostel versions, and this keeps the launcher aligned with
-          ;; ghostel's required buffer-local state.
-          (ghostel--init-buffer buf 24 80)
-          (setq ghostel--managed-buffer-name (buffer-name))
-          (setq ghostel--buffer-identity (buffer-name))
-          (ghostel--start-process)))
-      ;; Send the AI program name to the shell after it is ready.
-      (run-with-timer my/ai-term-ghostel-delay nil
-        (lambda (b p)
-          (when (buffer-live-p b)
-            (with-current-buffer b
-              (when (and (boundp 'ghostel--process) ghostel--process
-                         (process-live-p ghostel--process))
-                (ghostel-send-string
-                 (concat (my/ai-term--shell-command p) "\n"))))))
-        buf program)
-      buf))
+    "Create a Ghostel shell in DIR and send PROGRAM through its public API."
+    (require 'ghostel)
+    (let ((default-directory dir))
+      (let ((buf (ghostel-create buf-name nil)))
+        (with-current-buffer buf
+          (ghostel-send-string (concat (my/ai-term--shell-command program) "\n")))
+        buf)))
 
   (defun my/ai-term--make-eat (buf-name dir program)
-    "Create an eat terminal buffer BUF-NAME in DIR running PROGRAM."
+    "Create an Eat buffer in DIR running PROGRAM."
+    (require 'eat)
     (let* ((default-directory dir)
-           (argv (if (listp program) program (list shell-file-name shell-command-switch program))))
-      (apply #'eat-make (string-trim buf-name "*") (car argv) nil (cdr argv))))
+           (argv (if (listp program)
+                     program
+                   (list shell-file-name shell-command-switch program)))
+           (name (my/ai-term--backend-name buf-name)))
+      (apply #'eat-make name (car argv) nil (cdr argv))))
 
   (defun my/ai-term--make-ansi-term (buf-name dir program)
-    "Create an ansi-term buffer BUF-NAME in DIR running PROGRAM."
+    "Create an ansi-term buffer in DIR and send PROGRAM."
+    (require 'term)
     (let ((default-directory dir))
-      (with-current-buffer (ansi-term shell-file-name (string-trim buf-name "*"))
+      (with-current-buffer (ansi-term shell-file-name
+                                       (my/ai-term--backend-name buf-name))
         (term-send-raw-string (concat (my/ai-term--shell-command program) "\n"))
         (current-buffer))))
 
   (defun my/ai-term--make-buffer (buf-name dir program)
-    "Dispatch buffer creation to the configured backend."
-    (pcase my/ai-term-backend
-      ('ghostel   (my/ai-term--make-ghostel   buf-name dir program))
-      ('eat       (my/ai-term--make-eat       buf-name dir program))
-      ('ansi-term (my/ai-term--make-ansi-term buf-name dir program))
-      (_ (error "Unknown my/ai-term-backend: %s" my/ai-term-backend))))
+    "Dispatch creation with the originating buffer's local environment."
+    (require 'inheritenv)
+    (inheritenv-apply
+     (lambda ()
+       (pcase my/ai-term-backend
+         ('ghostel   (my/ai-term--make-ghostel buf-name dir program))
+         ('eat       (my/ai-term--make-eat buf-name dir program))
+         ('ansi-term (my/ai-term--make-ansi-term buf-name dir program))
+         (_ (error "Unknown my/ai-term-backend: %s" my/ai-term-backend))))))
 
   ;;; --- Core launch ---
 
   (defun my/ai-term-launch (tool program)
     "Launch PROGRAM as TOOL in the configured terminal.
-  Reuses an existing live per-project buffer if one exists.
-  Kills a stale (dead-process) buffer and starts fresh."
+  Reuse a live owned session for the same full directory and tool, regardless
+  of later changes to `my/ai-term-backend'.  A stale owned buffer is only
+  replaced after `kill-buffer' succeeds."
     (let* ((dir (my/ai-term--directory))
-           (buf-name (my/ai-term--buffer-name tool dir))
-           (existing (get-buffer buf-name)))
+           (identity (my/ai-term--directory-identity dir))
+           (live (my/ai-term--find-buffer dir tool t))
+           (stale (and (not live) (my/ai-term--find-buffer dir tool))))
       (cond
-       ;; Existing live instance — just show it
-       ((and existing (my/ai-term--buffer-alive-p existing))
-        (my/ai-term--display existing))
-       ;; Stale buffer — clean up and restart
+       (live
+        (my/ai-term--display live))
+       (stale
+        (unless (kill-buffer stale)
+          (user-error "AI terminal %s was not killed" (buffer-name stale)))
+        (when (buffer-live-p stale)
+          (user-error "AI terminal %s is still live" (buffer-name stale)))
+        (let ((buf (my/ai-term--make-buffer
+                    (my/ai-term--buffer-name tool dir) dir program)))
+          (my/ai-term--tag-buffer buf identity tool my/ai-term-backend)
+          (my/ai-term--display buf)
+          buf))
        (t
-        (when existing (kill-buffer existing))
-        (let ((buf (my/ai-term--make-buffer buf-name dir program)))
-          (when buf (my/ai-term--display buf))
+        (let ((buf (my/ai-term--make-buffer
+                    (my/ai-term--buffer-name tool dir) dir program)))
+          (my/ai-term--tag-buffer buf identity tool my/ai-term-backend)
+          (my/ai-term--display buf)
           buf)))))
 
   ;;; --- Toggle ---
 
   (defun my/ai-term-toggle ()
-    "Toggle the AI terminal side window for the current project.
-  If the window is visible, close it.  If a buffer exists but is hidden,
-  show it.  Does nothing if no AI terminal has been started."
+    "Toggle a live owned AI terminal side window for the current project."
     (interactive)
-    (let* ((dir (my/ai-term--directory))
-           (buf (my/ai-term--find-project-buffer dir)))
+    (let ((buf (my/ai-term--find-buffer (my/ai-term--directory) nil t)))
       (cond
        ((and buf (get-buffer-window buf))
         (delete-window (get-buffer-window buf)))
@@ -1337,23 +1352,18 @@ program command to it after a short delay.
   ;;; --- Send commands ---
 
   (defun my/ai-term--send (buf string)
-    "Send STRING followed by a newline to AI terminal BUF."
+    "Send STRING followed by a newline to owned AI terminal BUF."
     (with-current-buffer buf
-      (pcase my/ai-term-backend
-        ('ghostel
-         (when (and (boundp 'ghostel--process) ghostel--process
-                    (process-live-p ghostel--process))
-           (ghostel-send-string (concat string "\n"))))
-        ('eat
-         (when (and (boundp 'eat-terminal) eat-terminal)
-           (eat-term-send-string eat-terminal (concat string "\n"))))
-        ('ansi-term
-         (term-send-raw-string (concat string "\n"))))))
+      (pcase my/ai-term-originating-backend
+        ('ghostel (ghostel-send-string (concat string "\n")))
+        ('eat (eat-term-send-string eat-terminal (concat string "\n")))
+        ('ansi-term (term-send-raw-string (concat string "\n")))
+        (_ (user-error "Buffer %s is not an AI terminal" (buffer-name buf))))))
 
   (defun my/ai-term-send-command ()
-    "Prompt for a string and send it to the current project's AI terminal."
+    "Prompt for a string and send it to the current project's live AI terminal."
     (interactive)
-    (let ((buf (my/ai-term--find-project-buffer (my/ai-term--directory))))
+    (let ((buf (my/ai-term--find-buffer (my/ai-term--directory) nil t)))
       (if buf
           (my/ai-term--send buf (read-string "Send to AI: "))
         (message "No AI terminal running for this project"))))
@@ -1363,28 +1373,27 @@ program command to it after a short delay.
   (defun my/claude ()
     "Launch Claude Code in the current project's AI terminal."
     (interactive)
-    (my/ai-term-launch "claude" (or (executable-find "claude") "claude")))
+    (my/ai-term-launch "claude" "claude"))
 
   (defun my/opencode ()
     "Launch OpenCode in the current project's AI terminal."
     (interactive)
-    (my/ai-term-launch "opencode" (or (executable-find "opencode") "opencode")))
+    (my/ai-term-launch "opencode" "opencode"))
 
   (defun my/droid ()
     "Launch Factory.ai Droid in the current project's AI terminal."
     (interactive)
-    (my/ai-term-launch "droid" (or (executable-find "droid") "droid")))
+    (my/ai-term-launch "droid" "droid"))
 
   (defun my/pi ()
     "Launch Pi in the current project's AI terminal."
     (interactive)
-    (my/ai-term-launch "pi" (or (executable-find "pi") "pi")))
+    (my/ai-term-launch "pi" "pi"))
 
   (defun my/pi-no-sandbox ()
     "Launch Pi with --no-sandbox in the current project's AI terminal."
     (interactive)
-    (my/ai-term-launch "pi-no-sandbox"
-                       (list (or (executable-find "pi") "pi") "--no-sandbox")))
+    (my/ai-term-launch "pi-no-sandbox" '("pi" "--no-sandbox")))
 
   ;;; --- Keymap ---
 

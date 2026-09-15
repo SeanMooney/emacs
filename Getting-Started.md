@@ -55,7 +55,7 @@ This isn't vanilla Emacs. Here are the key differences you'll notice immediately
 ### 🧠 **Assistant Terminals**
 - Launch Claude Code, OpenCode, Droid, or Pi in a per-project side terminal
 - Keep the terminal backend configurable between ghostel, eat, and ansi-term
-- Reuse an existing live terminal for the current project
+- Reuse an existing live terminal for the same tool and full local or remote project identity
 
 ### ✍️ **Writing-First Design**
 - **Dyslexia-friendly fonts** and visual feedback
@@ -156,7 +156,10 @@ Claude Code, OpenCode, Droid, and Pi, so each tool runs in its own project-local
 - `C-c a c`, `C-c a o`, `C-c a d`, and `C-c a p` launch the respective tools.
 - `C-c a P` launches Pi with `--no-sandbox`.
 - `C-c a t` toggles the current project's assistant terminal, and `C-c a s` sends a command to it.
-- Set `my/ai-term-backend` to `ghostel` (default), `eat`, or `ansi-term`.
+- Set `my/ai-term-backend` to `ghostel` (default), `eat`, or `ansi-term`. A live session remains reusable after changing this setting.
+- Assistant buffers use each backend’s normal input mode (Ghostel/Eat: semi-character; ansi-term: character). For optional full character mode in Ghostel, use `C-c M-d`; `M-RET` returns to semi-character mode. Eat offers `M-x eat-char-mode` and `M-x eat-semi-char-mode`; ansi-term uses `C-c C-j` for line mode and `C-c C-k` for character mode.
+
+The launcher uses `inheritenv` while creating a terminal, so each backend retains the originating buffer's project-local envrc/Nix environment, including TRAMP's remote process environment. Ghostel starts its supported shell entry point and retains its shell integration. Tool names are resolved on the target, including on remote projects.
 
 The terminal-side configuration owned by those tools remains independent of this Emacs configuration.
 
@@ -847,7 +850,7 @@ Find the relevant section in `lit.org` and modify the `:bind` declarations in us
 Use the `use-package` format following existing patterns. The configuration uses `straight.el` so packages come directly from Git repositories.
 
 ### Assistant Terminal Configuration
-Set `my/ai-term-backend` in `lit.org` to choose `ghostel`, `eat`, or `ansi-term` for external assistant tools.
+Set `my/ai-term-backend` in `lit.org` to choose `ghostel`, `eat`, or `ansi-term` for external assistant tools. Existing live assistant sessions keep their originating backend until they exit; changing the setting affects only new sessions. Buffer labels are cosmetic: matching uses the complete target directory and TRAMP identity, so equally named local and remote projects do not share a session.
 
 ## Troubleshooting & Common Issues
 
