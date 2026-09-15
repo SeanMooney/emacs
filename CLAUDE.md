@@ -49,7 +49,7 @@ This is a personal Emacs configuration using a **literate programming** approach
 - **Version Control**: magit, built-in VC
 - **File Management**: dired, ibuffer, project.el
 - **Terminal**: eat (modern terminal emulator)
-- **AI Integration**: gptel, claude-code, MCP (Model Context Protocol)
+- **AI Integration**: terminal launchers for Claude Code, OpenCode, Droid, and Pi
 
 ### Language Support
 - **Python**: pyvenv for virtual environments, ruff for linting
@@ -143,8 +143,8 @@ All package configuration follows this pattern in `lit.org`:
 - Startup time is measured and displayed
 
 ### AI Integration
-- gptel configured for local Ollama instance at `192.168.16.172:11434`
-- MCP filesystem server provides project context to LLMs
-- claude-code provides direct Claude integration
+- Terminal launchers provide project-local sessions for Claude Code, OpenCode, Droid, and Pi.
+- Terminal-side integrations, including any MCP use, remain owned by those external tools.
+- No in-Emacs model client or MCP server is configured.
 
 This configuration prioritizes performance, modern development features, and clean, well-documented code structure.

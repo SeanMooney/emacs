@@ -1,6 +1,6 @@
 # Getting Started with This Emacs Configuration
 
-Welcome to a modern, AI-enhanced Emacs configuration designed for both writing and development. This setup emphasizes accessibility, productivity, and the power of AI assistance while maintaining Emacs's flexibility.
+Welcome to a modern Emacs configuration designed for writing and development. This setup emphasizes accessibility, productivity, and terminal-based coding assistants while maintaining Emacs's flexibility.
 
 ## Table of Contents
 
@@ -9,7 +9,7 @@ Welcome to a modern, AI-enhanced Emacs configuration designed for both writing a
 - [Quick Start: Essential Keybindings](#quick-start-essential-keybindings)
 - [Your First 10 Minutes](#your-first-10-minutes)
 - [Basic Workflows](#basic-workflows)
-- [AI Integration Guide](#ai-integration-guide)
+- [AI Terminal Launcher](#ai-terminal-launcher)
 - [Knowledge Management (Org-roam)](#knowledge-management-org-roam)
 - [Migration Guide: Coming from Other Editors](#migration-guide-coming-from-other-editors)
 - [Troubleshooting & Common Issues](#troubleshooting--common-issues)
@@ -22,7 +22,6 @@ Welcome to a modern, AI-enhanced Emacs configuration designed for both writing a
 - **Emacs 29.1+** (for best compatibility with modern features)
 - **Git** (for package management with straight.el)
 - **ripgrep** (`rg`) for fast project searching
-- **Ollama** running locally for AI features (optional but recommended)
 
 ### **Installation Steps**
 1. **Backup existing configuration**:
@@ -53,11 +52,10 @@ Welcome to a modern, AI-enhanced Emacs configuration designed for both writing a
 
 This isn't vanilla Emacs. Here are the key differences you'll notice immediately:
 
-### 🧠 **AI-Powered Everything**
-- **5 AI writing functions** for improving, summarizing, and proofreading text
-- **3 AI development functions** for code explanation, review, and documentation
-- **Local AI integration** with your Ollama instance
-- **Smart context awareness** through Model Context Protocol (MCP)
+### 🧠 **Assistant Terminals**
+- Launch Claude Code, OpenCode, Droid, or Pi in a per-project side terminal
+- Keep the terminal backend configurable between ghostel, eat, and ansi-term
+- Reuse an existing live terminal for the current project
 
 ### ✍️ **Writing-First Design**
 - **Dyslexia-friendly fonts** and visual feedback
@@ -82,15 +80,13 @@ This isn't vanilla Emacs. Here are the key differences you'll notice immediately
 | `C-x f` | Find file | Project-aware file finding |
 | `C-j` | Navigate symbols | Jump to functions, classes, headers |
 
-### AI Assistance (C-c g prefix)
+### Assistant Terminal (`C-c a` prefix)
 | Key | Function | What it does |
 |-----|----------|-------------|
-| `C-c g i` | Improve writing | Enhance selected text for clarity and grammar |
-| `C-c g t` | Adjust tone | Change text tone (professional/casual/academic) |
-| `C-c g s` | Summarize | Create concise summary of selected text |
-| `C-c g p` | Proofread | Check grammar, spelling, and style |
-| `C-c g e` | Explain code | Get AI explanation of selected code |
-| `C-c g r` | Review code | Get improvement suggestions for code |
+| `C-c a c` | Claude Code | Open or reuse the current project's Claude terminal |
+| `C-c a o` | OpenCode | Open or reuse the current project's OpenCode terminal |
+| `C-c a d` | Droid | Open or reuse the current project's Droid terminal |
+| `C-c a p` | Pi | Open or reuse the current project's Pi terminal |
 
 ### Essential Editing
 | Key | Function | Description |
@@ -108,10 +104,10 @@ C-x f lit.org
 ```
 This opens the main configuration file. Notice it's written in Org-mode - this is "literate programming" where documentation and code live together.
 
-### 2. **Try AI Writing Assistance**
-- Select any text in this file
-- Press `C-c g i` to improve it with AI
-- Try `C-c g s` to summarize a paragraph
+### 2. **Try an Assistant Terminal**
+- Open a project
+- Press `C-c a c` to launch Claude Code in the project's side terminal
+- Use `C-c a t` to show or hide an existing assistant terminal
 
 ### 3. **Explore Smart Search**
 - Press `C-f` and start typing - see live search with context
@@ -133,14 +129,14 @@ This opens the main configuration file. Notice it's written in Org-mode - this i
 ### **Daily Writing Workflow**
 1. **Start focused**: `C-c o` (Olivetti mode) + `C-c f` (choose font)
 2. **Write your draft** - notice live word count in mode line
-3. **Get AI assistance**: Select text → `C-c g i` (improve) or `C-c g p` (proofread)
+3. **Review your draft** with Flyspell and writegood-mode
 4. **Spell check**: `M-$` on any highlighted words
 5. **Style check**: writegood-mode highlights issues automatically
 
 ### **Development Workflow**
 1. **Open project**: `C-x p p` (switch to project)
 2. **Find files**: `C-x p f` (fuzzy find) or `C-j` (navigate symbols)
-3. **Understand code**: Select code → `C-c g e` (explain) or `C-c g r` (review)
+3. **Use an assistant terminal when needed**: `C-c a c` launches Claude Code for the project
 4. **Work with Git**: `C-x g` (Magit) - see changes in fringe
 5. **Run commands**: `C-c t p` (project terminal)
 
@@ -151,37 +147,18 @@ This opens the main configuration file. Notice it's written in Org-mode - this i
 - **Get help**: `C-h k` then press any key to learn what it does
 - **Find file**: `C-x C-f`
 
-## AI Integration Guide
+## AI Terminal Launcher
 
-Your configuration includes powerful AI features that work with your local Ollama instance for privacy.
+The configuration does not include an in-Emacs model client. It preserves terminal launchers for
+Claude Code, OpenCode, Droid, and Pi, so each tool runs in its own project-local terminal.
 
-### **What Each AI Function Does**
+### **Usage**
+- `C-c a c`, `C-c a o`, `C-c a d`, and `C-c a p` launch the respective tools.
+- `C-c a P` launches Pi with `--no-sandbox`.
+- `C-c a t` toggles the current project's assistant terminal, and `C-c a s` sends a command to it.
+- Set `my/ai-term-backend` to `ghostel` (default), `eat`, or `ansi-term`.
 
-#### **Writing AI Functions** (`C-c g` prefix)
-- **`C-c g i`** - **Improve**: "Make this clearer and fix grammar"
-- **`C-c g t`** - **Tone**: "Rewrite this professionally/casually/academically"
-- **`C-c g s`** - **Summarize**: "Give me the key points"
-- **`C-c g p`** - **Proofread**: "Check everything - grammar, style, clarity"
-- **`C-c g x`** - **Expand**: "Add more detail and examples"
-
-#### **Development AI Functions**
-- **`C-c g e`** - **Explain**: "What does this code do?"
-- **`C-c g r`** - **Review**: "How can I improve this code?"
-- **`C-c g d`** - **Document**: "Write documentation for this"
-
-### **AI Usage Tips**
-- **Select text first** - AI works on selected regions
-- **Be specific** - clear selection gives better results
-- **Iterate** - use multiple AI functions in sequence
-- **Privacy**: All processing happens locally with Ollama
-
-### **Example AI Workflow**
-1. Write a rough paragraph
-2. Select it and use `C-c g i` to improve clarity
-3. Use `C-c g t` to adjust tone for your audience
-4. Use `C-c g p` for final proofreading
-
-**Note**: If AI functions don't work, ensure Ollama is running at `192.168.16.172:11434`
+The terminal-side configuration owned by those tools remains independent of this Emacs configuration.
 
 ### Complete Keybinding Reference
 
@@ -209,24 +186,6 @@ C-c a s - Send command string to AI terminal
 C-c f - Switch font presets (Fontaine)
 ```
 *Mnemonic: "Fonts" - Quick font/accessibility changes*
-
-#### **C-c g** - **G**PT/Generative AI (All AI Functions)
-**Development AI:**
-```
-C-c g e - Explain code with AI
-C-c g r - Review code with AI
-C-c g d - Document code with AI
-```
-
-**Writing AI:**
-```
-C-c g i - Improve writing with AI
-C-c g t - adjust Tone with AI
-C-c g s - Summarize text with AI
-C-c g x - eXpand text with AI
-C-c g p - Proofread with AI
-```
-*Mnemonic: "GPT/Generative" - All AI assistance functions*
 
 #### **C-c l** - **L**SP/Language Server Protocol
 ```
@@ -432,29 +391,22 @@ The org-roam SQLite database (`.org-roam.db` inside the vault) is kept in sync a
 via `org-roam-db-autosync-mode`. No manual `M-x org-roam-db-sync` is needed after the initial
 setup.
 
-### **Vault Sync (Auto-commit & Push)**
+### **Vault Git Workflow**
 
-Every save of a file inside `~/repos/notes` automatically creates a git commit and pushes it
-to the remote, powered by `git-auto-commit-mode`.
-
-| Behaviour | Detail |
-|-----------|--------|
-| Trigger | On every `C-x C-s` (or any save) inside `~/repos/notes` |
-| Commit message | Auto-generated (no prompt) |
-| Push | Automatic — changes appear on remote immediately |
-| Activation | Via `find-file-hook`; no `.dir-locals.el` needed in the vault |
-| Absent vault | Package is silently skipped — no errors on machines without the vault |
+Saving notes only saves their files and updates Org-roam's database. Review, commit, and push
+vault changes manually with Magit (`C-x g`) or another Git client. No vault hook automatically
+creates commits or pushes changes.
 
 ## Keybinding Design Philosophy
 
 ### **1. Mnemonic Consistency**
-- **First letter matches category**: `C-c g` = GPT, `C-c s` = Spell, `C-c t` = Terminal
-- **Logical secondary letters**: `C-c g e` = GPT Explain, `C-c s c` = Spell Correct
+- **First letter matches category**: `C-c a` = Assistant terminal, `C-c s` = Spell, `C-c t` = Terminal
+- **Logical secondary letters**: `C-c a c` = Claude terminal, `C-c s c` = Spell Correct
 - **Easy to remember**: Natural language associations
 
 ### **2. Frequency-Based Placement**
 - **Single letters**: High-frequency actions (`C-c o` for focus mode)
-- **Two letters**: Specific functions (`C-c g i` for improve writing)
+- **Two letters**: Specific functions (`C-c a c` for Claude Code)
 - **Three letters**: Specialized operations (`C-c l f f` for format file)
 
 ### **3. Conflict Avoidance**
@@ -463,7 +415,7 @@ to the remote, powered by `git-auto-commit-mode`.
 - **Strategic overrides** only when significantly better
 
 ### **4. Contextual Grouping**
-- **AI functions**: All under `C-c g` prefix
+- **Assistant terminals**: All under `C-c a` prefix
 - **Spell checking**: All under `C-c s` prefix
 - **Terminals**: All under `C-c t` prefix
 - **Project operations**: All under `C-x p` prefix
@@ -488,18 +440,18 @@ to the remote, powered by `git-auto-commit-mode`.
 #### **Smart Additions**
 - `C-/` → Smart comment function (better than basic undo)
 - Multiple cursor system for modern editing
-- AI integration with logical keybindings
+- Assistant terminals with logical keybindings
 
 ## Learning Strategy
 
 ### **Start with These Core Bindings**
 1. **Navigation**: `C-f`, `C-x b`, `C-j`
-2. **AI assistance**: `C-c g i`, `C-c g e`
+2. **Assistant terminal**: `C-c a c`
 3. **Project work**: `C-x p p`, `C-x p f`
 4. **Focus**: `C-c o`, `C-c f`
 
 ### **Build Up Gradually**
-- **Learn one prefix at a time** (start with `C-c g` for AI)
+- **Learn one prefix at a time** (start with `C-c a` for assistant terminals)
 - **Use which-key** - it shows options after you press a prefix
 - **Practice the mnemonics** - they become natural quickly
 
@@ -519,6 +471,12 @@ This configuration is built on carefully selected packages that work together se
 - **Why it's better**: No package conflicts, reproducible builds, latest versions
 - **How to use**: Packages install automatically when you save `lit.org`
 - **Key feature**: Version locking with `straight/versions/default.el`
+
+#### Package Maintenance Safety
+- `C-c p c` runs Straight's modification check; it does not report general repository health.
+- `C-c p p` asks before pruning and should only be used after a complete, successful init.
+- `C-c p R` restores a backup for the current Straight profile only. After reviewing it, run `M-x straight-thaw-versions` explicitly to restore pinned checkouts.
+- `C-c p C` opens Magit for lockfile review and commit; it never makes an automatic timestamp-only commit.
 
 #### **use-package** - Configuration Framework
 - **What it does**: Declarative package configuration with lazy loading
@@ -574,23 +532,7 @@ This configuration is built on carefully selected packages that work together se
 - **How to use**: Works automatically with Corfu
 - **Key features**: File completion, spell completion, template expansion
 
-### **🤖 AI Integration Stack**
-
-#### **gptel** - LLM Client
-- **What it does**: Interface to language models (Z.AI GLM-5 default, local Ollama fallback)
-- **Why it's better**: Cloud AI for quality, local models for privacy — switchable on the fly
-- **How to use**: Powers all `C-c g` AI functions; switch backends with `C-c RET b` in gptel buffers
-- **Key features**: Streaming responses, multiple backends, secure API key via `~/.authinfo.gpg`
-- **Setup**: Add your Z.AI API key to `~/.authinfo.gpg`:
-  ```
-  machine api.z.ai login apikey password <your-z-ai-api-key>
-  ```
-
-#### **MCP (Model Context Protocol)** - Smart Context
-- **What it does**: Provides project file context to AI
-- **Why it's better**: AI knows about your project structure and files
-- **How to use**: Works automatically with AI functions
-- **Key features**: File system access, project awareness, RAG capabilities
+### **🤖 AI Terminal Launcher**
 
 #### **AI Terminal Launcher** - Coding Assistant Terminals
 - **What it does**: Launches Claude Code, OpenCode, Droid, or Pi in a per-project side terminal
@@ -787,20 +729,16 @@ This configuration is built on carefully selected packages that work together se
 - Get live previews of files and buffers
 - Navigate with keyboard efficiently
 
-### **The AI Stack**
-`gptel` + `MCP` + custom functions provide comprehensive AI assistance:
-- Local privacy with your Ollama instance
-- Project-aware context through MCP
-- Custom functions for specific workflows
-- Writing and coding assistance integrated
+### **The Assistant Terminal Workflow**
+The terminal launcher opens project-local sessions for external coding assistants while leaving
+their configuration and any terminal-side integrations to those tools.
 
 ### **The Writing Stack**
-`Flyspell` + `writegood-mode` + `wc-mode` + `Olivetti` + AI functions create a complete writing environment:
+`Flyspell` + `writegood-mode` + `wc-mode` + `Olivetti` create a complete writing environment:
 - Traditional spell checking with multiple languages
 - Style analysis beyond spelling
 - Progress tracking with word counts
 - Distraction-free focus mode
-- AI-powered improvement suggestions
 
 ### **The Development Stack**
 `Eglot` + `Flymake` + `Tree-sitter` + `Magit` + project tools provide a complete IDE:
@@ -825,10 +763,9 @@ This configuration is built on carefully selected packages that work together se
 
 ### Keybinding Organization
 All custom keybindings use consistent prefixes:
-- `C-c g` - All AI functions (code and writing)
 - `C-c s` - Spell checking and language tools
 - `C-c t` - Terminal and shell commands
-- `C-c a` - Claude Code integration
+- `C-c a` - Assistant terminal launcher
 - `C-x p` - Project management
 - `C-x r` - File browser functions
 
@@ -841,10 +778,9 @@ All custom keybindings use consistent prefixes:
 4. **Open project terminal**: `C-c t p`
 
 ### Code Understanding
-1. **Select unfamiliar code**
-2. **Press `C-c g e`** for AI explanation
-3. **Use `C-c g r`** for improvement suggestions
-4. **Jump to definitions** with LSP (automatic in most languages)
+1. **Use `C-c l`** for language-server diagnostics and formatting
+2. **Open an assistant terminal with `C-c a c`** when an external coding tool is useful
+3. **Jump to definitions** with LSP (automatic in most languages)
 
 ### Version Control
 - **Git status**: `C-x g` (opens Magit)
@@ -872,13 +808,10 @@ This automatically validates your configuration before commits, preventing synta
 3. **Switch to writing font**: `C-c f` → choose appropriate preset
 4. **Notice live word count** in the mode line: `WC[words,chars,lines]`
 
-### AI-Enhanced Writing Process
+### Writing Process
 1. **Draft your content** normally
-2. **Select paragraphs** and use:
-   - `C-c g i` - Improve clarity and grammar
-   - `C-c g t` - Adjust tone for audience
-   - `C-c g s` - Create summaries
-   - `C-c g p` - Comprehensive proofreading
+2. **Use Flyspell** for spelling corrections and writegood-mode for style feedback
+3. **Review and revise** with your preferred writing workflow
 
 ### Spell Checking & Grammar
 - **Automatic spell check** with traditional Flyspell
@@ -913,8 +846,8 @@ Find the relevant section in `lit.org` and modify the `:bind` declarations in us
 ### Adding Packages
 Use the `use-package` format following existing patterns. The configuration uses `straight.el` so packages come directly from Git repositories.
 
-### AI Configuration
-The AI functions connect to your local Ollama instance. Modify the `gptel` configuration in `lit.org` to change models or endpoints.
+### Assistant Terminal Configuration
+Set `my/ai-term-backend` in `lit.org` to choose `ghostel`, `eat`, or `ansi-term` for external assistant tools.
 
 ## Troubleshooting & Common Issues
 
@@ -934,10 +867,9 @@ The AI functions connect to your local Ollama instance. Modify the `gptel` confi
 - **High memory usage**: Normal for rich features, but restart Emacs if it gets excessive
 - **Laggy typing**: Disable some visual features temporarily, check for runaway processes
 
-### **AI & External Tool Issues**
-- **AI auth errors**: Verify `~/.authinfo.gpg` contains `machine api.z.ai login apikey password <key>` and that GnuPG is installed
-- **AI functions not working (Z.AI)**: Test with `M-: (gptel-api-key-from-auth-source "api.z.ai")` — should return your key after GPG passphrase prompt
-- **AI functions not working (Ollama)**: Switch to Ollama backend with `C-c RET b` and verify Ollama running at `192.168.16.172:11434`
+### **Assistant Terminal & External Tool Issues**
+- **Assistant terminal does not start**: Verify the selected tool executable is on `PATH`.
+- **Wrong terminal behavior**: Set `my/ai-term-backend` to a supported terminal backend.
 - **Spell check not working**: Install `aspell` or `hunspell` system packages
 - **LSP not starting**: Install language server for your language (e.g., `pip install pyright`)
 - **Search not working**: Install `ripgrep` (`rg` command)
@@ -973,10 +905,9 @@ git clone [repo-url] ~/.config/emacs
 - **Add keybindings**: Find similar bindings in `lit.org` and copy the pattern
 - **Change fonts**: Edit the fontaine presets section
 - **Add packages**: Follow existing `use-package` patterns
-- **Modify AI prompts**: Edit the AI function definitions
 
 ### **Growing Your Configuration**
-- **Week 1**: Master basic navigation and AI features
+- **Week 1**: Master basic navigation and terminal workflows
 - **Week 2**: Learn project management and Git workflow
 - **Week 3**: Customize keybindings and add packages for your languages
 - **Week 4**: Create your own custom functions and workflows
@@ -988,14 +919,14 @@ The following sections contain comprehensive reference material. Use them as nee
 ### Advanced Features to Explore
 
 ### Explore Advanced Features
-- **MCP integration** for project-aware AI assistance
+- **Assistant terminal integration** for project-local coding tools
 - **Tree-sitter** for better syntax highlighting
 - **Advanced project management** with project.el
 - **Terminal integration** with eat
 
 ### Customize for Your Needs
 - **Add language-specific configurations**
-- **Create custom AI prompts**
+- **Configure assistant terminal behavior**
 - **Set up additional spell check languages**
 - **Configure additional font presets**
 
@@ -1043,9 +974,8 @@ If you're coming from Vim, this Emacs configuration provides familiar concepts w
 - **LSP support**: `C-c l` prefix instead of coc.nvim or built-in LSP
 - **Fuzzy finding**: `C-x p f` instead of telescope/fzf
 
-#### **AI Enhancements (Beyond Vim)**
-- **Code explanation**: `C-c g e` - AI explains selected code
-- **Writing assistance**: `C-c g i` - AI improves selected text
+#### **Assistant Terminals (Beyond Vim)**
+- **Project-local tools**: `C-c a c` launches Claude Code in a side terminal
 - **Smart completion**: Works automatically (like nvim-cmp)
 
 #### **What You'll Love**
@@ -1070,11 +1000,9 @@ This configuration provides VS Code's best features with additional power:
 | Git integration | `C-x g` | Magit (more powerful than VS Code) |
 | Extensions | Built-in packages | No conflicts, faster startup |
 
-#### **AI Integration (ChatGPT/Copilot Alternative)**
-- **Local AI model** - your data stays private
-- **Context-aware**: Knows about your project files
-- **Multiple AI functions**: Explain, improve, summarize, review
-- **Writing assistance**: Beyond just code completion
+#### **Assistant Terminal Integration**
+- **External coding tools** run in project-local terminal buffers
+- **Configurable backend**: ghostel, eat, or ansi-term
 
 #### **Project Management**
 - **Project switching**: `C-x p p` (like "Recent" in VS Code)
@@ -1113,7 +1041,7 @@ This configuration provides VS Code's best features with additional power:
 
 #### **Week 1: Basic Navigation**
 1. **Learn core movement**: `C-f`, `C-x b`, `C-j`
-2. **Try AI assistance**: Select text, use `C-c g i` or `C-c g e`
+2. **Try an assistant terminal**: Open a project and use `C-c a c`
 3. **Use project features**: `C-x p p`, `C-x p f`
 4. **Practice window management**: `C-c j`, `M-o`
 
@@ -1127,12 +1055,12 @@ This configuration provides VS Code's best features with additional power:
 1. **Git with Magit**: `C-x g` for status, learn staging/committing
 2. **Terminal integration**: `C-c t p` for project terminals
 3. **LSP features**: `C-c l` prefix for language intelligence
-4. **Writing mode**: `C-c o` for focus, AI writing assistance
+4. **Writing mode**: `C-c o` for focus and writegood-mode for style feedback
 
 #### **Week 4: Customization**
 1. **Edit `lit.org`** - modify keybindings and add packages
 2. **Font accessibility**: `C-c f` for different presets
-3. **Create custom AI prompts** - modify the AI functions
+3. **Configure assistant terminal behavior** - modify `my/ai-term-backend`
 4. **Add language-specific configurations**
 
 ### **Common Migration Pitfalls**
@@ -1152,7 +1080,7 @@ This configuration provides VS Code's best features with additional power:
 ### **Why This Migration Is Worth It**
 
 #### **Unique Advantages**
-- **AI integration with privacy** - local models, your data stays local
+- **Assistant terminal integration** - project-local external coding tools
 - **Literate programming** - documentation and configuration together
 - **Unlimited customization** - modify any behavior
 - **Powerful text editing** - designed for text manipulation
@@ -1164,13 +1092,13 @@ This configuration provides VS Code's best features with additional power:
 - **Efficiency** - keyboard-driven workflow
 - **Power** - more sophisticated text manipulation
 - **Integration** - everything works together
-- **AI assistance** - beyond simple completion
+- **Assistant terminals** - external coding tools without an in-Emacs model client
 - **Accessibility** - dyslexia-friendly options built-in
 - **Flexibility** - adapt the editor to your needs
 
 ---
 
-**Remember**: This configuration grows with you. Start with the basics, then gradually explore the advanced features as you become comfortable. The AI assistance is there to help you understand both your code and your writing better.
+**Remember**: This configuration grows with you. Start with the basics, then gradually explore the advanced features as you become comfortable.
 
 **Migration tip**: Keep your old editor available for the first month while you build muscle memory. Most users find themselves preferring Emacs within 2-3 weeks of consistent use.
 

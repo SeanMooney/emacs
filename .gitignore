@@ -20,4 +20,5 @@ lit.el
 undo
 *~
 .venv/
+.tmp/
 recentf

@@ -651,7 +651,7 @@ Additional UI packages that help with discoverability and navigation.
     ;; Show source code for elisp functions
     (helpful-switch-buffer-function #'helpful-switch-to-buffer))
 
-  ;; Transient menu framework (used by magit, gptel, and other packages)
+  ;; Transient menu framework (used by Magit and other packages)
   (use-package transient
     :straight t)
 
@@ -1145,91 +1145,7 @@ Terminal commands are bound under the `C-c t` prefix to avoid conflicts with spe
                             (pulsar-mode -1))))
 #+END_SRC
 
-* GPT & AI
-** gptel
-Configuration for `gptel`, a client for interacting with Large Language Models.
-The default backend is Z.AI (Zhipu AI GLM-5) with a local Ollama instance as a fallback.
-
-#+BEGIN_SRC emacs-lisp
-  (use-package gptel
-    :custom
-    (gptel-default-mode 'org-mode)
-    (epa-pinentry-mode 'loopback)
-    :config
-    ;; Define Z.AI (Zhipu AI) backend using OpenAI-compatible API
-    ;; API key is read securely from ~/.authinfo.gpg via auth-source
-    (setq gptel-backend (gptel-make-openai "Z.AI"
-                          :host "api.z.ai"
-                          :endpoint "/api/coding/paas/v4/chat/completions"
-                          :stream t
-                          :key #'gptel-api-key-from-auth-source
-                          :models '(glm-4.7
-                                    glm-5
-                                    glm-4.7-flash))
-          gptel-model 'glm-4.7)
-
-    ;; Keep local Ollama as a secondary backend (switchable via C-c RET b)
-    (let ((ollama-host (or (getenv "OLLAMA_HOST") "192.168.16.172:11434")))
-      (gptel-make-ollama "Ollama"
-        :host ollama-host
-        :stream t
-        :models '("hf.co/unsloth/gemma-3-4b-it-qat-GGUF:UD-Q8_K_XL"
-                  "hf.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:UD-Q4_K_XL"
-                  "hf.co/unsloth/Magistral-Small-2506-GGUF:Q3_K_XL"
-                  "omaciel/ticketeer-granite3.3"
-                  "hf.co/unsloth/GLM-Z1-9B-0414-GGUF:Q5_K_XL")))
-
-    ;; Add error handling for unavailable backends
-    (defun my/gptel-check-backend ()
-      "Check if gptel backend is available and provide feedback."
-      (condition-case err
-          (gptel--model-capable-p 'stream)
-        (error
-         (message "GPTel backend unavailable: %s" (error-message-string err))
-         nil)))
-    (add-hook 'gptel-pre-request-hook #'my/gptel-check-backend))
-  (require 'gptel-integrations)
-#+END_SRC
-
-** Integrating the Model Context Protocol (MCP)
-
-This configures Emacs as a client for the Model Context Protocol (MCP),
-allowing gptel to automatically pull in context from external sources like
-the project's file system (a simple RAG setup). This provides the language
-model with relevant information about the project you're working on.
-
-#+BEGIN_SRC emacs-lisp
-  (use-package mcp
-    :straight (mcp :type git :host github :repo "lizqwerscott/mcp.el")
-    :after gptel
-    :custom
-    (mcp-hub-servers
-     `(;; 1. A Filesystem Server (with error checking)
-       ;; This server exposes the root directory of your current project to the LLM.
-       ;; Only enabled if npx is available.
-       ,@(when (executable-find "npx")
-           `(("filesystem" . (:command "npx"
-                             :args ("-y" "@modelcontextprotocol/server-filesystem"
-                                    ,(or (ignore-errors (project-root (project-current)))
-                                         default-directory))))))
-
-       ;; 2. A Fetch Server (with error checking)
-       ;; This server can fetch content from URLs.
-       ;; Only enabled if uvx is available.
-       ,@(when (executable-find "uvx")
-           `(("fetch" . (:command "uvx" :args ("mcp-server-fetch")))))))
-    :hook (after-init . (lambda ()
-                          (when mcp-hub-servers
-                            (condition-case err
-                                (mcp-hub-start-all-server)
-                              (error
-                               (message "MCP servers failed to start: %s" (error-message-string err)))))))
-    :config
-    ;; Load the hub functionality and tell gptel to use MCP as a context provider.
-    (require 'mcp-hub))
-#+END_SRC
-
-** AI Terminal Launcher
+* AI Terminal Launcher
 Lightweight replacement for ~claude-code.el~. Launches AI coding tools (Claude, OpenCode,
 Droid, Pi) in a right-side terminal panel at ~30% width, with per-project instance tracking.
 The terminal backend is configurable: ghostel (default), eat, or ansi-term.
@@ -1355,8 +1271,8 @@ program command to it after a short delay.
             (with-current-buffer b
               (when (and (boundp 'ghostel--process) ghostel--process
                          (process-live-p ghostel--process))
-                (process-send-string ghostel--process
-                                     (concat (my/ai-term--shell-command p) "\n"))))))
+                (ghostel-send-string
+                 (concat (my/ai-term--shell-command p) "\n"))))))
         buf program)
       buf))
 
@@ -1427,7 +1343,7 @@ program command to it after a short delay.
         ('ghostel
          (when (and (boundp 'ghostel--process) ghostel--process
                     (process-live-p ghostel--process))
-           (process-send-string ghostel--process (concat string "\n"))))
+           (ghostel-send-string (concat string "\n"))))
         ('eat
          (when (and (boundp 'eat-terminal) eat-terminal)
            (eat-term-send-string eat-terminal (concat string "\n"))))
@@ -1515,127 +1431,13 @@ start cleanly with no errors and no ~C-c n~ bindings.
     :config
     (org-roam-db-autosync-mode))
 #+END_SRC
-** Vault Sync
-Automatically commit and push every saved note to the remote git repository, keeping the vault
-in sync across machines. The hook activates ~git-auto-commit-mode~ on any file visited inside
-~org-roam-directory~, so no ~.dir-locals.el~ is needed in the vault itself. The package is
-skipped entirely when the vault directory is absent.
-
-#+BEGIN_SRC emacs-lisp
-  (use-package git-auto-commit-mode
-    :if (file-directory-p (expand-file-name "~/repos/notes"))
-    :custom
-    (gac-automatically-push-p t)
-    (gac-ask-for-summary-p nil)
-    :config
-    (add-hook 'find-file-hook
-              (lambda ()
-                (when (and (bound-and-true-p org-roam-directory)
-                           (buffer-file-name)
-                           (string-prefix-p (expand-file-name org-roam-directory)
-                                            (expand-file-name (buffer-file-name))))
-                  (git-auto-commit-mode 1)))))
-#+END_SRC
+** Vault Git Workflow
+Org-roam does not alter version control for the notes vault. Use Magit or another Git client to
+review, commit, and push note changes manually.
 * Custom Commands & Bindings
 This section is for custom functions and global keybindings that don't belong to a specific package.
 
 #+BEGIN_SRC emacs-lisp
-  ;; Helper for AI functions to display response in a dedicated buffer
-  (defun my/gptel--display-response (response info)
-    "Display gptel RESPONSE in a dedicated buffer.
-INFO is the plist of request metadata."
-    (if (stringp response)
-        (with-current-buffer (get-buffer-create "*gptel-response*")
-          (erase-buffer)
-          (insert response)
-          (goto-char (point-min))
-          (display-buffer (current-buffer)))
-      (message "gptel request failed: %s" (plist-get info :status))))
-
-  ;; AI-enhanced development commands
-  (defun my/explain-code-with-ai ()
-    "Explain selected code using AI."
-    (interactive)
-    (if (region-active-p)
-        (gptel-request (concat "Explain this code:\n\n"
-                               (buffer-substring-no-properties
-                                (region-beginning) (region-end)))
-          :callback #'my/gptel--display-response)
-      (message "Please select code to explain")))
-
-  (defun my/review-code-with-ai ()
-    "Review selected code for improvements."
-    (interactive)
-    (if (region-active-p)
-        (gptel-request (concat "Review this code for best practices and suggest improvements:\n\n"
-                               (buffer-substring-no-properties
-                                (region-beginning) (region-end)))
-          :callback #'my/gptel--display-response)
-      (message "Please select code to review")))
-
-  (defun my/document-code-with-ai ()
-    "Generate documentation for selected code using AI."
-    (interactive)
-    (if (region-active-p)
-        (gptel-request (concat "Generate documentation for this code:\n\n"
-                               (buffer-substring-no-properties
-                                (region-beginning) (region-end)))
-          :callback #'my/gptel--display-response)
-      (message "Please select code to document")))
-
-  ;; AI-enhanced writing assistance functions
-  (defun my/improve-writing-with-ai ()
-    "Improve selected text for clarity, grammar, and style using AI."
-    (interactive)
-    (if (region-active-p)
-        (gptel-request (concat "Improve this text for clarity, grammar, and style. "
-                               "Keep the meaning and intent intact:\n\n"
-                               (buffer-substring-no-properties
-                                (region-beginning) (region-end)))
-          :callback #'my/gptel--display-response)
-      (message "Please select text to improve")))
-
-  (defun my/adjust-tone-with-ai (tone)
-    "Adjust the tone of selected text (professional, casual, academic, friendly)."
-    (interactive "sTone (professional/casual/academic/friendly): ")
-    (if (region-active-p)
-        (gptel-request (concat (format "Rewrite this text in a %s tone while keeping the core message:\n\n" tone)
-                               (buffer-substring-no-properties
-                                (region-beginning) (region-end)))
-          :callback #'my/gptel--display-response)
-      (message "Please select text to adjust tone")))
-
-  (defun my/summarize-text-with-ai ()
-    "Summarize selected text using AI."
-    (interactive)
-    (if (region-active-p)
-        (gptel-request (concat "Provide a clear, concise summary of this text:\n\n"
-                               (buffer-substring-no-properties
-                                (region-beginning) (region-end)))
-          :callback #'my/gptel--display-response)
-      (message "Please select text to summarize")))
-
-  (defun my/expand-text-with-ai ()
-    "Expand selected text with more detail using AI."
-    (interactive)
-    (if (region-active-p)
-        (gptel-request (concat "Expand this text with more detail and examples while maintaining clarity:\n\n"
-                               (buffer-substring-no-properties
-                                (region-beginning) (region-end)))
-          :callback #'my/gptel--display-response)
-      (message "Please select text to expand")))
-
-  (defun my/proofread-with-ai ()
-    "Proofread selected text for grammar, spelling, and style issues using AI."
-    (interactive)
-    (if (region-active-p)
-        (gptel-request (concat "Proofread this text for grammar, spelling, punctuation, and style issues. "
-                               "Provide specific corrections and explanations:\n\n"
-                               (buffer-substring-no-properties
-                                (region-beginning) (region-end)))
-          :callback #'my/gptel--display-response)
-      (message "Please select text to proofread")))
-
   ;; Bury the current buffer instead of killing it.
   (global-set-key (kbd "C-c k") #'bury-buffer)
 
@@ -1667,18 +1469,6 @@ INFO is the plist of request metadata."
   ;; Keybinding for the restart command.
   (global-set-key (kbd "C-c x r") #'restart-emacs)
 
-  ;; AI-enhanced development keybindings (C-c g prefix for all AI functions)
-  (global-set-key (kbd "C-c g e") #'my/explain-code-with-ai)
-  (global-set-key (kbd "C-c g r") #'my/review-code-with-ai)
-  (global-set-key (kbd "C-c g d") #'my/document-code-with-ai)
-
-  ;; AI-enhanced writing keybindings (C-c g prefix)
-  (global-set-key (kbd "C-c g i") #'my/improve-writing-with-ai)     ; Improve text
-  (global-set-key (kbd "C-c g t") #'my/adjust-tone-with-ai)        ; Adjust tone
-  (global-set-key (kbd "C-c g s") #'my/summarize-text-with-ai)     ; Summarize
-  (global-set-key (kbd "C-c g x") #'my/expand-text-with-ai)        ; Expand text
-  (global-set-key (kbd "C-c g p") #'my/proofread-with-ai)          ; Proofread
-
   ;; Writing assistance and accessibility keybindings
   (global-set-key (kbd "C-c W") #'writegood-mode)         ; Toggle writing analysis
 
@@ -1694,8 +1484,8 @@ INFO is the plist of request metadata."
 #+END_SRC
 
 * Package Management
-This section contains advanced package management functions for straight.el,
-including health checking, version control integration, and a transient menu interface.
+This section contains package management functions for straight.el, version control
+integration, and a transient menu interface.
 
 ** Core Package Operations
 Functions for basic package management operations like freezing versions and updating packages.
@@ -1709,7 +1499,7 @@ Functions for basic package management operations like freezing versions and upd
         (progn
           (message "Freezing package versions...")
           (straight-freeze-versions)
-          (message "Package versions frozen to straight/versions/default.el"))
+          (message "Package versions frozen to configured lockfiles"))
       (error
        (message "Error freezing packages: %s" (error-message-string err)))))
 
@@ -1727,60 +1517,26 @@ Functions for basic package management operations like freezing versions and upd
        (message "Error updating packages: %s" (error-message-string err)))))
 #+END_SRC
 
-** Package Health & Maintenance
-Functions for checking package health, cleaning up build artifacts, and maintaining package repositories.
+** Package Maintenance
+`straight-check-all` checks for package modifications and rebuilds affected packages; it is not a
+repository-health report. Pruning deletes build artifacts and must only be run after a complete,
+successful init has established which packages are in use. It always asks for confirmation and is
+never run automatically.
 
 #+BEGIN_SRC emacs-lisp
-  ;; Package health and maintenance functions
-  (defun my/straight-check-all ()
-    "Check for broken or problematic packages."
+  ;; Package maintenance functions use straight.el's public interactive APIs.
+  (defun my/straight-check-modifications ()
+    "Rebuild packages that straight.el detects as modified."
     (interactive)
-    (condition-case err
-        (progn
-          (message "Checking package health...")
-          (let ((issues '()))
-            ;; Check for missing repositories
-            (dolist (package (hash-table-keys straight--recipe-cache))
-              (let ((repo-dir (straight--repos-dir (symbol-name package))))
-                (unless (file-directory-p repo-dir)
-                  (push (format "Missing repository: %s" package) issues))))
-
-            ;; Check for build issues
-            (dolist (package (hash-table-keys straight--recipe-cache))
-              (let ((build-dir (straight--build-dir (symbol-name package))))
-                (when (and (file-directory-p build-dir)
-                          (= 0 (length (directory-files build-dir nil "\\.el\\'"))))
-                  (push (format "Empty build directory: %s" package) issues))))
-
-            (if issues
-                (with-current-buffer (get-buffer-create "*Package Health*")
-                  (erase-buffer)
-                  (insert "Package Health Issues:\n\n")
-                  (dolist (issue issues)
-                    (insert "• " issue "\n"))
-                  (display-buffer (current-buffer))
-                  (message "Found %d package issues - see *Package Health* buffer" (length issues)))
-              (message "All packages appear healthy"))))
-      (error
-       (message "Error checking package health: %s" (error-message-string err)))))
+    (straight-check-all))
 
   (defun my/straight-prune-build ()
-    "Clean up unused build artifacts."
+    "Prune unused build artifacts after a complete successful init."
     (interactive)
-    (condition-case err
-        (progn
-          (message "Pruning build artifacts...")
-          (let ((pruned 0))
-            (dolist (build-dir (directory-files (straight--build-dir) t))
-              (when (and (file-directory-p build-dir)
-                        (not (member (file-name-nondirectory build-dir) '("." "..")))
-                        (not (gethash (intern (file-name-nondirectory build-dir))
-                                     straight--recipe-cache)))
-                (delete-directory build-dir t)
-                (setq pruned (1+ pruned))))
-            (message "Pruned %d unused build directories" pruned)))
-      (error
-       (message "Error pruning build artifacts: %s" (error-message-string err)))))
+    (when (yes-or-no-p
+           "Prune unused build artifacts after a complete successful init? ")
+      (straight-prune-build)
+      (message "Pruned unused build artifacts")))
 
   (defun my/straight-normalize-all ()
     "Fix repository states by normalizing all packages."
@@ -1794,30 +1550,35 @@ Functions for checking package health, cleaning up build artifacts, and maintain
        (message "Error normalizing packages: %s" (error-message-string err)))))
 
   (defun my/straight-rebuild-package ()
-    "Rebuild a specific package interactively."
+    "Select and rebuild a package using straight.el's interactive command."
     (interactive)
-    (condition-case err
-        (let* ((packages (hash-table-keys straight--recipe-cache))
-               (package (intern (completing-read "Rebuild package: "
-                                               (mapcar #'symbol-name packages)))))
-          (message "Rebuilding package: %s" package)
-          (straight-rebuild-package package)
-          (message "Package %s rebuilt successfully" package))
-      (error
-       (message "Error rebuilding package: %s" (error-message-string err)))))
+    (call-interactively #'straight-rebuild-package))
 #+END_SRC
 
 ** Version Control Integration
-Functions for managing lockfile versions, including backup, restore, commit, and diff operations.
+Functions for managing lockfile versions, including backup, restore, review, and diff operations.
+Restoring copies a selected backup over the current profile's lockfile; it does not change package
+checkouts. After reviewing a restored lockfile, run `M-x straight-thaw-versions` explicitly to
+restore its pinned checkouts. The review command opens Magit rather than creating an automatic,
+timestamp-only commit.
 
 #+BEGIN_SRC emacs-lisp
   ;; Version control integration functions
+  (defun my/straight-lockfile ()
+    "Return the lockfile for `straight-current-profile'."
+    (straight--versions-lockfile straight-current-profile))
+
+  (defun my/straight-lockfile-backup-directory ()
+    "Return the backup directory dedicated to `straight-current-profile'."
+    (expand-file-name (format "versions/backups/%s" straight-current-profile)
+                      (straight--dir)))
+
   (defun my/straight-backup-lockfile ()
-    "Create a timestamped backup of the current lockfile."
+    "Create a timestamped backup of the current profile's lockfile."
     (interactive)
     (condition-case err
-        (let* ((lockfile (straight--versions-lockfile))
-               (backup-dir (expand-file-name "versions/backups" (straight--dir)))
+        (let* ((lockfile (my/straight-lockfile))
+               (backup-dir (my/straight-lockfile-backup-directory))
                (timestamp (format-time-string "%Y%m%d-%H%M%S"))
                (backup-file (expand-file-name (format "lockfile-%s.el" timestamp) backup-dir)))
           (unless (file-directory-p backup-dir)
@@ -1831,15 +1592,15 @@ Functions for managing lockfile versions, including backup, restore, commit, and
        (message "Error backing up lockfile: %s" (error-message-string err)))))
 
   (defun my/straight-restore-lockfile ()
-    "Restore from a previous lockfile backup."
+    "Restore the current profile's lockfile from one of its backups."
     (interactive)
     (condition-case err
-        (let* ((backup-dir (expand-file-name "versions/backups" (straight--dir)))
-               (lockfile (straight--versions-lockfile)))
+        (let* ((backup-dir (my/straight-lockfile-backup-directory))
+               (lockfile (my/straight-lockfile)))
           (if (file-directory-p backup-dir)
               (let* ((backups (directory-files backup-dir nil "lockfile-.*\\.el$"))
                      (backup (when backups
-                              (completing-read "Restore from backup: " backups))))
+                              (completing-read "Restore from backup: " backups nil t))))
                 (when backup
                   (let ((backup-path (expand-file-name backup backup-dir)))
                     (when (yes-or-no-p (format "Restore lockfile from %s? This will overwrite current lockfile." backup))
@@ -1850,30 +1611,27 @@ Functions for managing lockfile versions, including backup, restore, commit, and
        (message "Error restoring lockfile: %s" (error-message-string err)))))
 
   (defun my/straight-commit-lockfile ()
-    "Commit lockfile changes with a descriptive message."
+    "Open the current profile's lockfile repository in Magit for review and commit."
     (interactive)
-    (condition-case err
-        (let* ((lockfile (straight--versions-lockfile))
-               (default-directory user-emacs-directory))
-          (if (and (file-exists-p lockfile)
-                   (vc-backend lockfile))
-              (let ((commit-msg (format "Pin package versions (%s)"
-                                      (format-time-string "%Y-%m-%d %H:%M"))))
-                (vc-checkin (list lockfile) nil commit-msg)
-                (message "Lockfile committed: %s" commit-msg))
-            (message "Lockfile not under version control or doesn't exist")))
-      (error
-       (message "Error committing lockfile: %s" (error-message-string err)))))
+    (let ((lockfile (my/straight-lockfile)))
+      (if (file-exists-p lockfile)
+          (progn
+            (require 'magit-status)
+            (let ((repository-root (magit-toplevel (file-name-directory lockfile))))
+              (if repository-root
+                  (magit-status repository-root)
+                (user-error "Lockfile is not in a Git repository: %s" lockfile))))
+        (message "Lockfile does not exist: %s" lockfile))))
 
   (defun my/straight-diff-lockfile ()
-    "View changes in the lockfile compared to the last commit."
+    "View changes in the current profile's lockfile compared to the last commit."
     (interactive)
     (condition-case err
-        (let* ((lockfile (straight--versions-lockfile))
-               (default-directory user-emacs-directory))
-          (if (and (file-exists-p lockfile)
-                   (vc-backend lockfile))
-              (vc-diff nil t (list lockfile))
+        (let* ((lockfile (my/straight-lockfile))
+               (backend (and (file-exists-p lockfile) (vc-backend lockfile)))
+               (default-directory (file-name-directory lockfile)))
+          (if backend
+              (vc-diff nil t (list backend (list lockfile)))
             (message "Lockfile not under version control or doesn't exist")))
       (error
        (message "Error viewing lockfile diff: %s" (error-message-string err)))))
@@ -1897,13 +1655,13 @@ A magit-style transient menu that provides organized access to all package manag
       ("u" "Update all packages" my/straight-update-all)
       ("r" "Rebuild package" my/straight-rebuild-package)]
      ["Maintenance"
-      ("c" "Check package health" my/straight-check-all)
+      ("c" "Check modified packages" my/straight-check-modifications)
       ("p" "Prune build artifacts" my/straight-prune-build)
       ("n" "Normalize repositories" my/straight-normalize-all)]
      ["Version Control"
       ("b" "Backup lockfile" my/straight-backup-lockfile)
       ("B" "Restore lockfile" my/straight-restore-lockfile)
-      ("C" "Commit lockfile" my/straight-commit-lockfile)
+      ("C" "Review lockfile in Magit" my/straight-commit-lockfile)
       ("d" "Diff lockfile" my/straight-diff-lockfile)]
      ["Quit"
       ("q" "Quit" transient-quit-one)]])
@@ -1919,11 +1677,11 @@ All package management functions are bound under the `C-c p` prefix for easy acc
   (define-key my/package-map (kbd "m") #'my/straight-transient)        ; Main transient menu
   (define-key my/package-map (kbd "f") #'my/straight-freeze-versions)  ; Freeze versions
   (define-key my/package-map (kbd "u") #'my/straight-update-all)       ; Update all packages
-  (define-key my/package-map (kbd "c") #'my/straight-check-all)        ; Check package health
+  (define-key my/package-map (kbd "c") #'my/straight-check-modifications) ; Check modified packages
   (define-key my/package-map (kbd "p") #'my/straight-prune-build)      ; Prune build artifacts
   (define-key my/package-map (kbd "r") #'my/straight-rebuild-package)  ; Rebuild package
   (define-key my/package-map (kbd "b") #'my/straight-backup-lockfile)  ; Backup lockfile
   (define-key my/package-map (kbd "R") #'my/straight-restore-lockfile) ; Restore lockfile
-  (define-key my/package-map (kbd "C") #'my/straight-commit-lockfile)  ; Commit lockfile
+  (define-key my/package-map (kbd "C") #'my/straight-commit-lockfile)  ; Review lockfile in Magit
   (define-key my/package-map (kbd "d") #'my/straight-diff-lockfile)    ; Diff lockfile
 #+END_SRC
