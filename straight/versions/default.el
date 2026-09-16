@@ -48,7 +48,6 @@
  ("pfuture" . "19b53aebbc0f2da31de6326c495038901bffb73c")
  ("posframe" . "435055dd6894fd4e8b21b355d40c0b289211b714")
  ("pulsar" . "c7b52c79cb27c8f507300559c43df7191b9dab36")
- ("pyvenv" . "31ea715f2164dd611e7fc77b26390ef3ca93509b")
  ("queue" . "8df1334d54d4735d2f821790422a850dfaaa08ef")
  ("rainbow-delimiters" . "f40ece58df8b2f0fb6c8576b527755a552a5e763")
  ("ranger.el" . "cfcab21cd21eb48709fb4436ba84f3e2a048a432")

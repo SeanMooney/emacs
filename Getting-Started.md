@@ -43,7 +43,8 @@ Welcome to a modern Emacs configuration designed for writing and development. Th
 ### **Optional Dependencies**
 - **Fonts**: SauceCodePro Nerd Font is preferred for monospace text, followed by Source Code Pro and generic Monospace; variable-pitch text uses generic Serif
 - **OpenDyslexic**: For dyslexia-friendly font preset
-- **Language servers**: For your programming languages (e.g., `pyright` for Python)
+- **Language servers**: Install servers for languages other than managed Python (for example, `rust-analyzer` for Rust)
+- **Python environments**: `uv` is preferred when available; `python3` with the standard `venv` module is the fallback
 - **Spell checkers**: `aspell` or `hunspell` for enhanced spell checking
 - **direnv + nix-direnv**: For automatic Nix devshell environment loading (optional)
 
@@ -200,6 +201,7 @@ C-c l f b - Format Buffer
 C-c l r n - Rename symbol
 C-c l s - Shutdown LSP
 C-c l i - toggle Inlay hints
+C-c l l - Start or join LSP (uses managed environments for Python)
 C-c l n - Next Flymake diagnostic
 C-c l p - Previous Flymake diagnostic
 ```
@@ -232,6 +234,23 @@ C-c t a - Ansi-term
 C-c t p - Project terminal (eat)
 ```
 *Mnemonic: "Terminal" - All shell/terminal interfaces*
+
+#### **C-c v** - Python **V**irtual Environments
+```
+C-c v t c - Create the host tool environment
+C-c v t r - Rebuild the managed host tool environment
+C-c v t u - Update tools without recreating the environment
+C-c v t s - Select an existing host tool environment
+C-c v p c - Create or prepare the project runtime environment
+C-c v p r - Rebuild the managed project runtime environment
+C-c v p s - Select an existing project runtime environment
+C-c v i   - Show selected environments and Eglot status
+C-c v e   - Restart Eglot with the current selections
+C-c v l   - Show Eglot's protocol events
+C-c v m   - Open the environment transient menu
+```
+Use `C-u C-c v p c` to select a different tox environment.
+*Mnemonic: "Virtual environment → Tool/Project → Create/Rebuild/Update/Select"*
 
 #### **C-c x** - E**x**ecute/System Operations
 ```
@@ -644,6 +663,39 @@ This configuration is built on carefully selected packages that work together se
 - **How to use**: `C-c l` prefix for all LSP operations
 - **Key features**: Auto-completion, diagnostics, refactoring, jump-to-definition
 
+Python keeps language-server tools separate from project dependencies. Use
+`C-c v t c` once per host to create the managed `pylsp`/tox environment
+from `tool-requirements.txt`. Use `C-c v p c` in a project to select a tox
+environment and create its runtime environment outside the checkout. Explicit
+tool and project selections persist across Emacs restarts in
+`${XDG_STATE_HOME:-~/.local/state}/emacs/python-environments.json`; loading that
+metadata never creates an environment or starts a subprocess. Tox remains
+responsible for project dependencies and OpenStack
+upper constraints, including `TOX_CONSTRAINTS_FILE` overrides. Projects without
+tox receive an empty `uv` virtual environment, falling back to `python3 -m
+venv`.
+
+Use `C-c v p r` after changing branches or when the project environment must be
+recreated. `C-c v t u` updates host tools independently, while `C-c v t r`
+rebuilds the managed tool environment. Creation and rebuilding are explicit and
+appear in dedicated compilation buffers. Python files only auto-start Eglot
+when both environments are already ready. Existing tool or runtime environments
+can be selected with `C-c v t s` and `C-c v p s`. Environments created before
+selection persistence was added must be prepared or selected once to record
+their association. Selecting an arbitrary existing runtime treats it as
+unmanaged; use project preparation for managed rebuild support.
+
+`C-c v i` reports the selected tool and runtime paths and whether the current
+buffer is managed by Eglot. Because an existing server retains the initialization
+options with which it started, use `C-c v e` after changing a selection. Use
+`C-c v l` to inspect Eglot's protocol events and confirm the actual pylsp
+initialization payload. `C-c v m` provides the same operations in a transient
+menu, while which-key labels the complete hierarchy.
+
+For TRAMP projects, managed environments and commands live on the remote host
+under its `${XDG_DATA_HOME:-~/.local/share}/emacs/python/` directory. The local
+`tool-requirements.txt` is copied there before tool creation or updates.
+
 #### **Flymake** - Real-time Error Checking
 - **What it does**: Shows syntax errors and warnings in real-time
 - **Why it's better**: Immediate feedback, integrates with LSP
@@ -653,7 +705,7 @@ This configuration is built on carefully selected packages that work together se
 #### **Tree-sitter** (treesit-auto) - Advanced Syntax Parsing
 - **What it does**: Better syntax highlighting and code understanding
 - **Why it's better**: More accurate parsing, better performance
-- **How to use**: Works automatically for supported languages
+- **How to use**: Supported files, including Rust, activate their `-ts-mode`; missing grammars prompt for installation
 - **Key features**: Incremental parsing, better highlighting, structural editing
 
 #### **nix-ts-mode** - Nix Expression Editing

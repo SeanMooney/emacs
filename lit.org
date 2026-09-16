@@ -364,6 +364,7 @@ I use the `fontaine` package to easily switch between predefined font configurat
             `((small
              :default-height 90)
             (regular
+             :default-weight normal
              :default-height 120)
             (medium
              :default-weight semilight
@@ -841,13 +842,14 @@ These are language-agnostic tools that form the foundation of the IDE experience
     (use-package eglot
       :ensure nil
       :straight (:type built-in)
-      :hook ((python-mode . eglot-ensure)
-             (python-ts-mode . eglot-ensure)
+      :hook ((python-mode . my/python-eglot-ensure)
+             (python-ts-mode . my/python-eglot-ensure)
              (js-mode . eglot-ensure)
              (js-ts-mode . eglot-ensure)
              (typescript-mode . eglot-ensure)
              (typescript-ts-mode . eglot-ensure)
              (tsx-ts-mode . eglot-ensure)
+             (rust-ts-mode . eglot-ensure)
              (zig-mode . eglot-ensure)
              (zig-ts-mode . eglot-ensure))
       :bind (("C-c l c" . eglot-reconnect)
@@ -904,38 +906,579 @@ Tree-sitter provides faster and more accurate syntax parsing, which improves hig
     (treesit-auto-install 'prompt)
     :config
     ;; Only add tree-sitter modes for languages that benefit from it
-    (treesit-auto-add-to-auto-mode-alist '(python bash javascript typescript json yaml zig nix))
+    (treesit-auto-add-to-auto-mode-alist '(python bash javascript typescript json yaml rust zig nix))
     (global-treesit-auto-mode))
 #+END_SRC
 
 ** Language: Python
-This section configures the Python development environment, including virtual environment management with `pyvenv` and linting with `ruff`.
+Python uses separate host-local tool environments and project runtime environments.
+Managed environments live outside project checkouts under the target host's XDG data
+home.  Environment creation and updates are always explicit; visiting a file only
+reuses environments that are already ready.
 
 #+BEGIN_SRC emacs-lisp
-  (use-package pyvenv
-    :config
-    (pyvenv-mode 1)
-    ;; Set correct Python interpreter when a virtual env is activated/deactivated.
-    (setq pyvenv-post-activate-hooks
-          (list (lambda ()
-                  (setq python-shell-interpreter (concat pyvenv-virtual-env "bin/python3")))))
-    (setq pyvenv-post-deactivate-hooks
-          (list (lambda ()
-                  (setq python-shell-interpreter "python3")))))
+  (require 'json)
+
+  (defvar my/python-environment-state-file
+    (expand-file-name
+     "emacs/python-environments.json"
+     (file-name-as-directory
+      (expand-file-name (or (getenv "XDG_STATE_HOME") "~/.local/state"))))
+    "Local JSON file storing explicit Python environment selections.")
+
+  (defvar my/python-tool-environments (make-hash-table :test #'equal)
+    "Selected Python tool environments, keyed by local or TRAMP host.")
+
+  (defvar my/python-runtime-environments (make-hash-table :test #'equal)
+    "Selected Python runtime environments, keyed by project root.")
+
+  (defun my/python--save-environment-selections ()
+    "Atomically save explicit Python environment selections as JSON."
+    (let (tools runtimes temporary)
+      (maphash
+       (lambda (host path)
+         (when (and (stringp host) (stringp path))
+           (push `((host . ,host) (path . ,path)) tools)))
+       my/python-tool-environments)
+      (maphash
+       (lambda (project record)
+         (let ((path (plist-get record :path))
+               (tox-environment (plist-get record :tox-env)))
+           (when (and (stringp project) (stringp path))
+             (push (append `((project . ,project)
+                             (path . ,path)
+                             (managed . ,(if (plist-get record :managed)
+                                              t :false)))
+                           (when (stringp tox-environment)
+                             `((tox-env . ,tox-environment))))
+                   runtimes))))
+       my/python-runtime-environments)
+      (make-directory (file-name-directory my/python-environment-state-file) t)
+      (unwind-protect
+          (progn
+            (setq temporary
+                  (make-temp-file
+                   (expand-file-name ".python-environments-"
+                                     (file-name-directory
+                                      my/python-environment-state-file))))
+            (with-temp-file temporary
+              (set-buffer-file-coding-system 'utf-8-unix)
+              (insert (json-serialize
+                       `((version . 1)
+                         (tools . ,(vconcat tools))
+                         (runtimes . ,(vconcat runtimes)))
+                       :false-object :false)))
+            (set-file-modes temporary #o600)
+            (rename-file temporary my/python-environment-state-file t)
+            (setq temporary nil))
+        (when (and temporary (file-exists-p temporary))
+          (delete-file temporary)))))
+
+  (defun my/python--load-environment-selections ()
+    "Load valid selection metadata without accessing environment paths."
+    (when (file-readable-p my/python-environment-state-file)
+      (condition-case error-data
+          (let ((data
+                 (with-temp-buffer
+                   (insert-file-contents my/python-environment-state-file)
+                   (json-parse-buffer :object-type 'alist :array-type 'list
+                                      :false-object :false))))
+            (unless (equal (alist-get 'version data) 1)
+              (error "Unsupported state version"))
+            (dolist (entry (alist-get 'tools data))
+              (let ((host (alist-get 'host entry))
+                    (path (alist-get 'path entry)))
+                (when (and (stringp host) (stringp path))
+                  (puthash host path my/python-tool-environments))))
+            (dolist (entry (alist-get 'runtimes data))
+              (let ((project (alist-get 'project entry))
+                    (path (alist-get 'path entry))
+                    (managed (alist-get 'managed entry))
+                    (tox-environment (alist-get 'tox-env entry)))
+                (when (and (stringp project)
+                           (stringp path)
+                           (memq managed '(t :false))
+                           (or (null tox-environment)
+                               (stringp tox-environment)))
+                  (puthash project
+                           (append (list :path path :managed (eq managed t))
+                                   (when tox-environment
+                                     (list :tox-env tox-environment)))
+                           my/python-runtime-environments)))))
+        (error
+         (message "Ignoring invalid Python environment state: %s"
+                  (error-message-string error-data))))))
+
+  (my/python--load-environment-selections)
+
+  (defun my/python--host (&optional path)
+    "Return the local or TRAMP host identity for PATH."
+    (or (file-remote-p (or path default-directory)) "local"))
+
+  (defun my/python--native-path (path)
+    "Return PATH without its TRAMP prefix for a target-host process."
+    (if (file-remote-p path) (file-local-name path) path))
+
+  (defun my/python--command-output (program &rest arguments)
+    "Run PROGRAM with ARGUMENTS and return its trimmed output."
+    (with-temp-buffer
+      (let ((status (apply #'process-file program nil t nil arguments)))
+        (unless (and (integerp status) (zerop status))
+          (error "%s failed: %s" program (string-trim (buffer-string))))
+        (string-trim (buffer-string)))))
+
+  (defun my/python--data-home ()
+    "Return the target host's XDG data directory as an Emacs path."
+    (if-let* ((remote (file-remote-p default-directory)))
+        (concat remote
+                (file-name-as-directory
+                 (my/python--command-output
+                  "sh" "-lc"
+                  "printf '%s' \"${XDG_DATA_HOME:-$HOME/.local/share}\"")))
+      (file-name-as-directory
+       (expand-file-name (or (getenv "XDG_DATA_HOME") "~/.local/share")))))
+
+  (defun my/python--managed-root ()
+    "Return the target host's managed Python environment directory."
+    (expand-file-name "emacs/python/" (my/python--data-home)))
+
+  (defun my/python--default-tool-environment ()
+    "Return the target host's default managed tool environment."
+    (expand-file-name "tools/default/" (my/python--managed-root)))
+
+  (defun my/python--executable (environment executable)
+    "Return EXECUTABLE inside virtual ENVIRONMENT."
+    (expand-file-name (concat "bin/" executable) environment))
+
+  (defun my/python--same-host-p (path)
+    "Return non-nil when PATH belongs to the current host."
+    (equal (my/python--host path) (my/python--host)))
+
+  (defun my/python--valid-tool-environment-p (environment)
+    "Return non-nil when ENVIRONMENT contains pylsp and tox."
+    (and environment
+         (my/python--same-host-p environment)
+         (file-executable-p (my/python--executable environment "pylsp"))
+         (file-executable-p (my/python--executable environment "tox"))))
+
+  (defun my/python--tool-environment (&optional required)
+    "Return this host's selected or default tool environment.
+Signal an error when REQUIRED is non-nil and none is ready."
+    (let* ((host (my/python--host))
+           (selected (gethash host my/python-tool-environments))
+           (default (my/python--default-tool-environment))
+           (environment (cond ((my/python--valid-tool-environment-p selected) selected)
+                              ((my/python--valid-tool-environment-p default) default))))
+      (when (and required (not environment))
+        (user-error "No Python tool environment; create or select one first"))
+      environment))
+
+  (defun my/python-select-tool-environment (directory)
+    "Select an existing tool virtual environment at DIRECTORY for this host."
+    (interactive
+     (list (read-directory-name "Python tool environment: "
+                                (my/python--default-tool-environment) nil t)))
+    (setq directory (file-name-as-directory (expand-file-name directory)))
+    (unless (my/python--same-host-p directory)
+      (user-error "Tool environment must be on the current host"))
+    (unless (my/python--valid-tool-environment-p directory)
+      (user-error "%s must contain executable bin/pylsp and bin/tox" directory))
+    (puthash (my/python--host) directory my/python-tool-environments)
+    (my/python--save-environment-selections)
+    (message "Selected Python tool environment: %s" directory))
+
+  (defun my/python--copy-tool-requirements ()
+    "Copy tool-requirements.txt to the target host and return its path."
+    (let* ((source (expand-file-name "tool-requirements.txt" user-emacs-directory))
+           (destination (expand-file-name "tools/tool-requirements.txt"
+                                          (my/python--managed-root))))
+      (make-directory (file-name-directory destination) t)
+      (copy-file source destination t)
+      destination))
+
+  (defun my/python--shell-command (arguments)
+    "Quote and join ARGUMENTS as a shell command."
+    (mapconcat #'shell-quote-argument arguments " "))
+
+  (defun my/python--compilation-buffer-name (name _mode)
+    "Return a target-specific compilation buffer NAME."
+    (format "*%s*" name))
+
+  (defun my/python--compile (name commands)
+    "Run shell COMMANDS in compilation buffer NAME."
+    (compilation-start
+     (mapconcat #'my/python--shell-command commands " && ")
+     'compilation-mode
+     (apply-partially #'my/python--compilation-buffer-name name)))
+
+  (defun my/python--venv-command (environment &optional clear)
+    "Return a command to create ENVIRONMENT, optionally CLEARing it first."
+    (let ((path (my/python--native-path environment)))
+      (if-let* ((uv (executable-find "uv" t)))
+          (append (list (my/python--native-path uv) "venv")
+                  (when clear (list "--clear")) (list path))
+        (let ((python3 (or (executable-find "python3" t)
+                           (user-error "python3 is unavailable on this host"))))
+          (append (list (my/python--native-path python3) "-m" "venv")
+                  (when clear (list "--clear")) (list path))))))
+
+  (defun my/python--install-command (environment requirements &optional upgrade)
+    "Return a command to install REQUIREMENTS into ENVIRONMENT.
+UPGRADE requests newer versions satisfying the tracked minimums."
+    (let ((python (my/python--native-path
+                   (my/python--executable environment "python")))
+          (requirements (my/python--native-path requirements)))
+      (if-let* ((uv (executable-find "uv" t)))
+          (append (list (my/python--native-path uv) "pip" "install"
+                        "--python" python)
+                  (when upgrade (list "--upgrade"))
+                  (list "-r" requirements))
+        (append (list python "-m" "pip" "install")
+                (when upgrade (list "--upgrade"))
+                (list "-r" requirements)))))
+
+  (defun my/python-create-tool-environment (&optional rebuild)
+    "Create this host's default tool environment.
+With prefix argument REBUILD, clear and recreate the managed environment."
+    (interactive "P")
+    (let* ((environment (my/python--default-tool-environment))
+           (requirements (my/python--copy-tool-requirements)))
+      (when (and (file-directory-p environment) (not rebuild))
+        (user-error "%s already exists; update it or rebuild with a prefix argument"
+                    environment))
+      (when (and rebuild
+                 (not (yes-or-no-p (format "Rebuild managed tool environment %s? "
+                                           environment))))
+        (user-error "Tool environment rebuild cancelled"))
+      (make-directory (file-name-directory environment) t)
+      (puthash (my/python--host) environment my/python-tool-environments)
+      (my/python--save-environment-selections)
+      (my/python--compile
+       (format "Python tools %s" (my/python--host))
+       (list (my/python--venv-command environment rebuild)
+             (my/python--install-command environment requirements)))))
+
+  (defun my/python-update-tool-environment ()
+    "Update the selected tool environment without recreating it."
+    (interactive)
+    (let ((environment (my/python--tool-environment t))
+          (requirements (my/python--copy-tool-requirements)))
+      (my/python--compile
+       (format "Python tools %s" (my/python--host))
+       (list (my/python--install-command environment requirements t)))))
+
+  (defun my/python-rebuild-tool-environment ()
+    "Clear and recreate this host's managed tool environment."
+    (interactive)
+    (my/python-create-tool-environment t))
+
+  (defun my/python--project-root (&optional noerror)
+    "Return the current project root, or nil when NOERROR is non-nil."
+    (when-let* ((project (project-current (not noerror))))
+      (file-name-as-directory (project-root project))))
+
+  (defun my/python--project-environment-root (project)
+    "Return the managed environment directory for PROJECT."
+    (let ((name (file-name-nondirectory (directory-file-name project)))
+          (identity (secure-hash 'sha256 project)))
+      (expand-file-name
+       (format "projects/%s-%s/"
+               (replace-regexp-in-string "[^[:alnum:]_.-]" "-" name)
+               identity)
+       (my/python--managed-root))))
+
+  (defun my/python--runtime-record (&optional project)
+    "Return the ready runtime record for PROJECT."
+    (when-let* ((root (or project (my/python--project-root t)))
+                (record (gethash root my/python-runtime-environments))
+                (environment (plist-get record :path))
+                ((my/python--same-host-p environment))
+                ((file-executable-p (my/python--executable environment "python")))
+                ((or (not (plist-get record :managed))
+                     (file-exists-p (expand-file-name ".emacs-ready" environment)))))
+      record))
+
+  (defun my/python-select-runtime-environment (directory)
+    "Select existing runtime DIRECTORY for the current project."
+    (interactive
+     (let ((project (my/python--project-root)))
+       (list (read-directory-name "Python runtime environment: "
+                                  (my/python--project-environment-root project)
+                                  nil t))))
+    (let ((project (my/python--project-root)))
+      (setq directory (file-name-as-directory (expand-file-name directory)))
+      (unless (my/python--same-host-p directory)
+        (user-error "Runtime environment must be on the project host"))
+      (unless (file-executable-p (my/python--executable directory "python"))
+        (user-error "%s does not contain executable bin/python" directory))
+      (puthash project (list :path directory :managed nil)
+               my/python-runtime-environments)
+      (my/python--save-environment-selections)
+      (my/python--apply-runtime)
+      (message "Selected Python runtime environment: %s" directory)))
+
+  (defun my/python--file-matches-p (file regexp)
+    "Return non-nil when FILE contains REGEXP."
+    (and (file-readable-p file)
+         (with-temp-buffer
+           (insert-file-contents file)
+           (re-search-forward regexp nil t))))
+
+  (defun my/python--tox-project-p (project)
+    "Return non-nil when PROJECT contains a tox configuration."
+    (or (file-exists-p (expand-file-name "tox.ini" project))
+        (file-exists-p (expand-file-name ".tox.ini" project))
+        (file-exists-p (expand-file-name "tox.toml" project))
+        (my/python--file-matches-p (expand-file-name "setup.cfg" project)
+                                   "^\\[tox:tox\\]")
+        (my/python--file-matches-p (expand-file-name "pyproject.toml" project)
+                                   "^\\[tool\\.tox\\(?:\\.|\\]\\)")))
+
+  (defun my/python--tox-environments (project tool)
+    "Return tox environments for PROJECT using TOOL."
+    (let ((default-directory project)
+          (tox (my/python--native-path (my/python--executable tool "tox"))))
+      (seq-filter
+       (lambda (line)
+         (and (string-match-p "\\`[[:alnum:]_.-]+\\'" line)
+              (not (member line '("." "..")))))
+       (split-string (my/python--command-output tox "list" "--no-desc")
+                     "\n" t "[[:space:]]+"))))
+
+  (defun my/python--managed-tox-environment (base tox-environment)
+    "Return a safe managed path under BASE for TOX-ENVIRONMENT."
+    (when (member tox-environment '("." ".."))
+      (user-error "Unsafe tox environment name: %s" tox-environment))
+    (let ((environment
+           (expand-file-name
+            (format "%s-%s/"
+                    (replace-regexp-in-string "[^[:alnum:]_.-]" "-" tox-environment)
+                    (secure-hash 'sha256 tox-environment))
+            base)))
+      (unless (string-prefix-p (file-name-as-directory (expand-file-name base))
+                               (file-name-as-directory environment))
+        (error "Managed environment escaped its project directory: %s" environment))
+      environment))
+
+  (defun my/python--prepare-runtime (rebuild choose)
+    "Prepare the current runtime environment.
+REBUILD recreates a managed environment; CHOOSE prompts for a tox environment."
+    (let* ((project (my/python--project-root))
+           (current (gethash project my/python-runtime-environments))
+           (managed (plist-get current :managed)))
+      (when (and rebuild (not managed))
+        (user-error "Select or prepare a managed project environment before rebuilding"))
+      (when (and rebuild
+                 (not (yes-or-no-p (format "Rebuild managed environment for %s? " project))))
+        (user-error "Runtime environment rebuild cancelled"))
+      (if (my/python--tox-project-p project)
+          (let* ((tool (my/python--tool-environment t))
+                 (environments (my/python--tox-environments project tool))
+                 (old-tox (plist-get current :tox-env))
+                 (tox-environment
+                  (if (and old-tox (member old-tox environments) (not choose)) old-tox
+                    (completing-read "Tox environment: " environments nil t
+                                     nil nil (and (member "py3" environments) "py3"))))
+                 (base (my/python--project-environment-root project))
+                 (environment (my/python--managed-tox-environment
+                               base tox-environment))
+                 (workdir (expand-file-name "tox-work/" base))
+                 (marker (expand-file-name ".emacs-ready" environment))
+                 (tox (my/python--native-path (my/python--executable tool "tox"))))
+            (puthash project
+                     (list :path environment :managed t :tox-env tox-environment)
+                     my/python-runtime-environments)
+            (my/python--save-environment-selections)
+            (let ((default-directory project))
+              (my/python--compile
+               (format "Python runtime %s" (substring (secure-hash 'sha1 project) 0 8))
+               (list (list "rm" "-f" (my/python--native-path marker))
+                     (append (list tox "--workdir" (my/python--native-path workdir))
+                             (when rebuild (list "--recreate"))
+                             (list "devenv" "-e" tox-environment
+                                   (my/python--native-path environment)))
+                     (list "touch" (my/python--native-path marker))))))
+        (let* ((base (my/python--project-environment-root project))
+               (environment (expand-file-name "venv/" base))
+               (marker (expand-file-name ".emacs-ready" environment)))
+          (puthash project (list :path environment :managed t)
+                   my/python-runtime-environments)
+          (my/python--save-environment-selections)
+          (make-directory base t)
+          (my/python--compile
+           (format "Python runtime %s" (substring (secure-hash 'sha1 project) 0 8))
+           (list (list "rm" "-f" (my/python--native-path marker))
+                 (my/python--venv-command environment rebuild)
+                 (list "touch" (my/python--native-path marker))))))))
+
+  (defun my/python-prepare-runtime-environment (&optional choose)
+    "Prepare an out-of-tree runtime environment.
+With prefix argument CHOOSE, prompt for a different tox environment."
+    (interactive "P")
+    (my/python--prepare-runtime nil choose))
+
+  (defun my/python-rebuild-runtime-environment ()
+    "Recreate the managed runtime environment for the current checkout."
+    (interactive)
+    (my/python--prepare-runtime t nil))
+
+  (defun my/python-eglot-contact (&optional _interactive _project)
+    "Return pylsp from the selected tool environment with runtime settings."
+    (let* ((tool (my/python--tool-environment t))
+           (runtime (or (my/python--runtime-record)
+                        (user-error "Prepare or select a project runtime environment first")))
+           (environment (my/python--native-path (plist-get runtime :path))))
+      (list (my/python--native-path (my/python--executable tool "pylsp"))
+            :initializationOptions
+            `(:pylsp (:plugins (:jedi (:environment ,environment)))))))
+
+  (defun my/python-eglot-ensure ()
+    "Start Eglot only when this project already has ready environments."
+    (when (and (my/python--project-root t)
+               (my/python--tool-environment)
+               (my/python--runtime-record))
+      (eglot-ensure)))
+
+  (defun my/python--apply-runtime ()
+    "Use the selected runtime environment in the current Python buffer."
+    (when-let* ((runtime (my/python--runtime-record))
+                (environment (plist-get runtime :path)))
+      (setq-local python-shell-interpreter
+                  (my/python--native-path
+                   (my/python--executable environment "python")))))
+
+  (defun my/python-eglot ()
+    "Start or join Eglot using the selected Python environments."
+    (interactive)
+    (my/python--tool-environment t)
+    (unless (my/python--runtime-record)
+      (user-error "Prepare or select a project runtime environment first"))
+    (my/python--apply-runtime)
+    (call-interactively #'eglot))
 
   (defun my/python-mode-setup ()
-    "Use four-column indentation in Python buffers."
+    "Configure indentation and the selected runtime for Python buffers."
     (setq-local tab-width 4)
-    (setq-local python-indent-offset 4))
+    (setq-local python-indent-offset 4)
+    (my/python--apply-runtime))
+
+  (defun my/python-restart-eglot ()
+    "Restart Eglot with the currently selected Python environments."
+    (interactive)
+    (unless (derived-mode-p 'python-base-mode)
+      (user-error "This command requires a Python buffer"))
+    (my/python--tool-environment t)
+    (unless (my/python--runtime-record)
+      (user-error "Prepare or select a project runtime environment first"))
+    (when-let* ((server (and (featurep 'eglot)
+                             (eglot-managed-p)
+                             (eglot-current-server))))
+      (eglot-shutdown server))
+    (my/python-eglot))
+
+  (defun my/python-environment-status ()
+    "Describe selected Python environments and current Eglot state."
+    (interactive)
+    (let* ((host (my/python--host))
+           (project (my/python--project-root t))
+           (selected-tool (or (gethash host my/python-tool-environments)
+                              (my/python--default-tool-environment)))
+           (tool-ready (my/python--valid-tool-environment-p selected-tool))
+           (runtime (and project
+                         (gethash project my/python-runtime-environments)))
+           (runtime-path (plist-get runtime :path))
+           (runtime-ready (and project (my/python--runtime-record project)))
+           (managed (and (featurep 'eglot) (eglot-managed-p))))
+      (with-help-window "*Python environments*"
+        (princ (format "Host: %s\n" host))
+        (princ (format "Project: %s\n\n" (or project "none")))
+        (princ (format "Selected tool environment: %s\n"
+                       (or selected-tool "none")))
+        (princ (format "Tool ready: %s\n\n" (if tool-ready "yes" "no")))
+        (princ (format "Selected runtime environment: %s\n"
+                       (or runtime-path "none")))
+        (princ (format "Runtime ready: %s\n" (if runtime-ready "yes" "no")))
+        (princ (format "Managed by Emacs: %s\n"
+                       (if (plist-get runtime :managed) "yes" "no")))
+        (princ (format "Tox environment: %s\n\n"
+                       (or (plist-get runtime :tox-env) "none")))
+        (princ (format "Current buffer managed by Eglot: %s\n"
+                       (if managed "yes" "no")))
+        (when managed
+          (princ "A running server may predate the selections above.\n"))
+        (princ "Use C-c v e to restart Eglot with the selected environments.\n")
+        (princ "Use C-c v l to inspect Eglot's actual initialization exchange.\n"))))
+
+  (transient-define-prefix my/python-environment-menu ()
+    "Manage Python tool and project environments."
+    [["Tool environment"
+      ("c" "Create" my/python-create-tool-environment)
+      ("R" "Rebuild" my/python-rebuild-tool-environment)
+      ("u" "Update" my/python-update-tool-environment)
+      ("s" "Select" my/python-select-tool-environment)]
+     ["Project runtime"
+      ("p" "Prepare" my/python-prepare-runtime-environment)
+      ("r" "Rebuild" my/python-rebuild-runtime-environment)
+      ("S" "Select" my/python-select-runtime-environment)]
+     ["Eglot"
+      ("i" "Environment info" my/python-environment-status)
+      ("e" "Restart with selections" my/python-restart-eglot)
+      ("l" "Show events" eglot-events-buffer)]])
+
+  (defvar-keymap my/python-tool-environment-map
+    :doc "Commands for host-local Python tool environments."
+    "c" #'my/python-create-tool-environment
+    "r" #'my/python-rebuild-tool-environment
+    "s" #'my/python-select-tool-environment
+    "u" #'my/python-update-tool-environment)
+
+  (defvar-keymap my/python-project-environment-map
+    :doc "Commands for project Python runtime environments."
+    "c" #'my/python-prepare-runtime-environment
+    "r" #'my/python-rebuild-runtime-environment
+    "s" #'my/python-select-runtime-environment)
+
+  (defvar-keymap my/python-environment-map
+    :doc "Commands for managed Python virtual environments."
+    "e" #'my/python-restart-eglot
+    "i" #'my/python-environment-status
+    "l" #'eglot-events-buffer
+    "m" #'my/python-environment-menu
+    "p" my/python-project-environment-map
+    "t" my/python-tool-environment-map)
+
+  (global-set-key (kbd "C-c v") my/python-environment-map)
+
+  (with-eval-after-load 'which-key
+    (which-key-add-key-based-replacements
+      "C-c v" '("virtual environments" . "Python environments")
+      "C-c v e" "restart Eglot with selections"
+      "C-c v i" "show environment info"
+      "C-c v l" "show Eglot events"
+      "C-c v m" "open environment menu"
+      "C-c v p" '("project" . "Project runtime environment")
+      "C-c v p c" "create or prepare"
+      "C-c v p r" "rebuild"
+      "C-c v p s" "select existing"
+      "C-c v t" '("tool" . "Host tool environment")
+      "C-c v t c" "create"
+      "C-c v t r" "rebuild"
+      "C-c v t s" "select existing"
+      "C-c v t u" "update"))
 
   (use-package python
     :ensure nil
     :straight (:type built-in)
     :hook ((python-mode . my/python-mode-setup)
            (python-ts-mode . my/python-mode-setup))
+    :bind (:map python-base-mode-map
+                ("C-c l l" . my/python-eglot))
     :custom
-    ;; Use the fast and powerful `ruff` linter for checking Python code.
     (python-check-command "ruff check --ignore-noqa"))
+
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '((python-mode python-ts-mode) . my/python-eglot-contact)))
 #+END_SRC
 
 ** Language: Markdown

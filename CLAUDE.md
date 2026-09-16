@@ -51,7 +51,7 @@ This is a personal Emacs configuration using a **literate programming** approach
 - **AI Integration**: terminal launchers for Claude Code, OpenCode, Droid, and Pi
 
 ### Language Support
-- **Python**: pyvenv for virtual environments, ruff for linting
+- **Python**: XDG-managed host tool and project runtime environments, Eglot/pylsp, and ruff linting
 - **Markdown**: markdown-mode with GitHub flavor
 - **Nix**: nix-ts-mode for expression editing
 - **Tree-sitter**: Automatic parser installation for syntax highlighting
@@ -134,6 +134,13 @@ All package configuration follows this pattern in `lit.org`:
 4. Run `M-x straight-use-package` if needed
 5. Restart Emacs and test the configuration
 6. Verify documentation consistency before committing
+
+### Python Tool Environments
+- `tool-requirements.txt` defines minimum versions for the host-local tox and pylsp environment
+- Managed environments live under the local or TRAMP host's XDG data directory, not inside project repositories
+- Explicit selections persist locally under the Emacs XDG state directory; loading them must never create environments or contact remote hosts
+- Keep tool-environment updates independent from project runtime rebuilds
+- Let each project's tox configuration own dependency and upper-constraints behavior
 
 ### Performance Considerations
 - Native compilation is enabled (cache in `eln-cache/`)
