@@ -26,9 +26,9 @@ if [[ ! -f "lit.org" ]]; then
     exit 1
 fi
 
-print_status "$YELLOW" "📝 Tangling lit.org to generate init.el..."
+print_status "$YELLOW" "📝 Tangling lit.org to generate lit.el..."
 
-# Tangle the org file to generate init.el
+# Tangle the literate configuration to its generated lit.el file.
 if ! emacs --batch --eval "(progn (require 'ob-tangle) (org-babel-tangle-file \"$(pwd)/lit.org\"))" 2>/dev/null; then
     print_status "$RED" "❌ Error: Failed to tangle lit.org. Check for syntax errors in org blocks."
     exit 1
@@ -42,7 +42,8 @@ print_status "$YELLOW" "🧪 Testing Emacs configuration loading..."
 # Create a temporary file to capture any errors
 error_log=$(mktemp)
 
-# Try to load the configuration
+# Load the hand-maintained bootstrap; it loads generated lit.el through
+# org-babel-load-file, matching normal startup.
 if emacs --batch --load init.el --eval "(message \"Configuration loaded successfully\")" 2>"$error_log"; then
     print_status "$GREEN" "✅ Emacs configuration loads successfully!"
     rm -f "$error_log"
@@ -51,7 +52,8 @@ if emacs --batch --load init.el --eval "(message \"Configuration loaded successf
     if [[ -f "lit.el" ]]; then
         print_status "$GREEN" "✅ lit.el generated successfully"
     else
-        print_status "$YELLOW" "⚠️  Warning: lit.el not found, but configuration loaded"
+        print_status "$RED" "❌ Error: lit.el was not generated"
+        exit 1
     fi
 
     exit 0

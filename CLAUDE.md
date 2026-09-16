@@ -6,17 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a personal Emacs configuration using a **literate programming** approach:
 
-- **Main files**: `init.el` (bootstrap) loads `lit.org` (literate config)
+- **Main files**: hand-maintained `init.el` bootstraps Straight and Org, then `org-babel-load-file` loads `lit.org`
+- **Generated file**: `lit.org` tangles to ignored `lit.el`; `org-babel-load-file` regenerates it only when needed, then loads it
 - **Package management**: Uses `straight.el` with `use-package` for declarative configuration
-- **Configuration pattern**: All settings are written in `lit.org` using Org-mode, then tangled to `init.el`
-- **Auto-tangling**: The configuration automatically re-tangles when `lit.org` is saved
+- **Auto-tangling**: Saving `lit.org` regenerates `lit.el`, but does not reload the running Emacs
 
 ## Development Commands
 
 ### Configuration Management
-- Edit configuration in `lit.org` (not `init.el` directly)
-- Save `lit.org` to automatically tangle changes to `init.el`
-- Restart Emacs: `C-c x r` (bound to `restart-emacs`)
+- Edit normal configuration in `lit.org`; edit `init.el` only for pre-Org bootstrap changes
+- Save `lit.org` to automatically tangle changes to generated `lit.el`
+- Restart Emacs to load tangled changes: `C-c x r` (bound to `restart-emacs`)
 
 ### Package Management
 - Packages are managed via `straight.el` and defined in `lit.org`
@@ -24,8 +24,8 @@ This is a personal Emacs configuration using a **literate programming** approach
 - To update packages: `M-x straight-pull-all` then `M-x straight-rebuild-all`
 
 ### Testing Changes
-- Most changes take effect immediately when `lit.org` is saved and tangled
-- For major changes, restart Emacs with `C-c x r`
+- Saving `lit.org` only regenerates `lit.el`; it does not evaluate the new configuration
+- Restart Emacs with `C-c x r` to test tangled changes
 - Check startup time in `*Messages*` buffer (shows performance metrics)
 
 ### Pre-commit Configuration Validation
@@ -37,10 +37,9 @@ This is a personal Emacs configuration using a **literate programming** approach
 
 ## Key Configuration Sections
 
-### Core Setup (Early Init)
-- Performance optimizations (GC threshold, native compilation)
-- UI tweaks (disable toolbar, menu bar, etc.)
-- Package management bootstrap
+### Core Setup
+- `init.el`: performance bootstrap, Straight, use-package, and Straight's Org
+- `lit.org`: UI tweaks and the rest of the declarative configuration
 
 ### Package Categories
 - **Completion**: vertico, marginalia, orderless, consult, corfu, cape
@@ -131,11 +130,10 @@ All package configuration follows this pattern in `lit.org`:
 ### When Adding New Packages
 1. Add `use-package` declaration to appropriate section in `lit.org`
 2. Update corresponding documentation in `Getting-Started.md`
-3. Save to auto-tangle
+3. Save to auto-tangle `lit.el`
 4. Run `M-x straight-use-package` if needed
-5. Test configuration
-6. Restart Emacs if needed
-7. Verify documentation consistency before committing
+5. Restart Emacs and test the configuration
+6. Verify documentation consistency before committing
 
 ### Performance Considerations
 - Native compilation is enabled (cache in `eln-cache/`)

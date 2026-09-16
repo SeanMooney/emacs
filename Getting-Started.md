@@ -19,9 +19,10 @@ Welcome to a modern Emacs configuration designed for writing and development. Th
 ## Prerequisites & Installation
 
 ### **System Requirements**
-- **Emacs 29.1+** (for best compatibility with modern features)
+- **Emacs 30.1+** (required for the bundled library versions used here)
 - **Git** (for package management with straight.el)
 - **ripgrep** (`rg`) for fast project searching
+- **OpenDyslexic Nerd Font** or **OpenDyslexic** for the optional `dyslexia-friendly` Fontaine preset
 
 ### **Installation Steps**
 1. **Backup existing configuration**:
@@ -40,7 +41,7 @@ Welcome to a modern Emacs configuration designed for writing and development. Th
 4. **Verify setup**: Check startup message in `*Messages*` buffer for any errors
 
 ### **Optional Dependencies**
-- **Fonts**: Install Source Code Pro and FiraGO for best experience
+- **Fonts**: SauceCodePro Nerd Font is preferred for monospace text, followed by Source Code Pro and generic Monospace; variable-pitch text uses generic Serif
 - **OpenDyslexic**: For dyslexia-friendly font preset
 - **Language servers**: For your programming languages (e.g., `pyright` for Python)
 - **Spell checkers**: `aspell` or `hunspell` for enhanced spell checking
@@ -120,8 +121,8 @@ This opens the main configuration file. Notice it's written in Org-mode - this i
 - Use `C-x C-d` to see recently visited directories
 
 ### 5. **Adjust the Interface**
-- Press `C-c f` to try different font presets
-- Include the dyslexia-friendly option if helpful
+- The `regular` Fontaine preset is applied at startup
+- Press `C-c f` to try other presets, including the dyslexia-friendly option
 - Try `C-c o` for distraction-free writing mode
 
 ## Basic Workflows
@@ -471,9 +472,9 @@ This configuration is built on carefully selected packages that work together se
 
 #### **straight.el** - Package Management
 - **What it does**: Downloads packages directly from Git repositories
-- **Why it's better**: No package conflicts, reproducible builds, latest versions
-- **How to use**: Packages install automatically when you save `lit.org`
-- **Key feature**: Version locking with `straight/versions/default.el`
+- **Why it's better**: Git-backed package revisions and one package-management path
+- **How to use**: Packages install when the configuration is loaded after a restart
+- **Key feature**: External package versions are locked in `straight/versions/default.el`; selected Emacs libraries use the bundled Emacs 30 versions
 
 #### Package Maintenance Safety
 - `C-c p c` runs Straight's modification check; it does not report general repository health.
@@ -575,9 +576,9 @@ This configuration is built on carefully selected packages that work together se
 ### **🎨 Interface & Accessibility**
 
 #### **Fontaine** - Font Management
-- **What it does**: Easy switching between font presets
+- **What it does**: Applies the `regular` preset at startup and supports switching presets
 - **Why it's better**: Quick accessibility adjustments, consistent sizing
-- **How to use**: `C-c f` to switch presets (including dyslexia-friendly)
+- **How to use**: `C-c f` to switch presets (the dyslexia-friendly preset prefers OpenDyslexic Nerd Font and falls back to OpenDyslexic)
 - **Key features**: Multiple presets, accessibility support, per-face configuration
 
 #### **ef-themes** - Modern Color Themes
@@ -626,6 +627,7 @@ This configuration is built on carefully selected packages that work together se
 - **How to use**:
   - `C-x r d` → Full ranger mode
   - `C-x r j` → Minimal deer mode
+  - `zh` → Cycle hidden-file visibility (dotfiles are shown initially)
 - **Key features**: File previews, three-pane layout, vim-like navigation
 
 #### **Treemacs** - File Tree Sidebar
@@ -754,10 +756,11 @@ their configuration and any terminal-side integrations to those tools.
 ### Understanding the Architecture
 
 ### Literate Programming Approach
-- **Edit `lit.org`**, not `init.el` directly
-- **Automatic tangling** - changes save to `init.el` automatically
+- **Edit `lit.org`** for normal configuration; `init.el` owns the pre-Org bootstrap
+- **Generated `lit.el`** - saving `lit.org` tangles its Emacs Lisp blocks to ignored `lit.el`
+- **Startup flow** - `init.el` bootstraps Straight and Org, then loads `lit.el` through `org-babel-load-file`
+- **Restart required** - tangling does not reload the running configuration
 - **Documentation with code** - explanations live alongside configuration
-- **Easy customization** - find what you want to change and modify it
 
 ### Package Management
 - **straight.el** manages packages directly from Git
@@ -841,7 +844,7 @@ This configuration is designed with accessibility in mind:
 ### Advanced Customization Reference
 
 ### Adding Your Own Functions
-Edit `lit.org` and add functions in the "Custom Commands & Bindings" section. The configuration will automatically reload when you save.
+Edit `lit.org` and add functions in the "Custom Commands & Bindings" section. Saving regenerates `lit.el`; restart Emacs to load the changes.
 
 ### Changing Keybindings
 Find the relevant section in `lit.org` and modify the `:bind` declarations in use-package blocks.
@@ -857,11 +860,11 @@ Set `my/ai-term-backend` in `lit.org` to choose `ghostel`, `eat`, or `ansi-term`
 ### **Installation Issues**
 - **"Package not found" errors**: Run `M-x straight-pull-all` then `M-x straight-rebuild-all`
 - **Slow first startup**: Normal - packages are installing (2-3 minutes)
-- **Font issues**: Install Source Code Pro or choose different preset with `C-c f`
+- **Font issues**: The regular preset falls back to generic monospace and serif families; use `C-c f` to choose another preset
 - **Native compilation warnings**: Normal - they'll disappear after packages compile
 
 ### **Configuration Issues**
-- **Changes don't take effect**: Edit `lit.org`, not `init.el`. Save to auto-tangle
+- **Changes don't take effect**: Save `lit.org` to regenerate `lit.el`, then restart Emacs
 - **Keybinding doesn't work**: Use `C-h k` then press key to see what it's bound to
 - **Package seems broken**: Try `M-x straight-rebuild-package` then restart Emacs
 
@@ -899,8 +902,8 @@ git clone [repo-url] ~/.config/emacs
 ## Customization & Next Steps
 
 ### **Safe Customization**
-- **Always edit `lit.org`** (never edit `init.el` directly)
-- **Test changes incrementally** (save `lit.org` after small changes)
+- **Edit `lit.org` for normal settings** (`init.el` is only for bootstrap changes)
+- **Test changes incrementally** (save `lit.org`, then restart Emacs)
 - **Use version control** (`git add` and `git commit` your changes)
 - **Keep backups** of working configurations
 

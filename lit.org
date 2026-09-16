@@ -5,11 +5,13 @@
 
 This is a literate Emacs configuration file written in Org mode.
 The primary goal is to create a setup that is well-documented, modular, and easy to maintain.
-All configuration is tangled into `init.el` upon saving this file.
+Saving this file tangles its Emacs Lisp blocks to the generated `lit.el`; restart
+Emacs to load those changes.  The hand-maintained `init.el` bootstraps Straight
+and Org before loading this file through `org-babel-load-file`.
 
-* Early Init
-This section contains critical setup that must run at the very beginning of the
-Emacs startup process, before any packages are loaded.
+* Core Startup Configuration
+These settings run from the generated `lit.el` after `init.el` has bootstrapped
+Straight, use-package, and Org.
 
 ** Early UI Tweaks
 These settings disable distracting UI elements and set up fundamental frame behavior
@@ -47,69 +49,40 @@ to ensure a clean and predictable launch.
 
 #+END_SRC
 
-** Package Management (straight.el)
-I use `straight.el` for package management, which works directly with Git repositories.
-It is paired with `use-package` for declarative configuration.
-This block bootstraps `straight.el` if it's not already installed.
+** Package Runtime Configuration
+Straight and use-package are bootstrapped once in `init.el`, before Org loads
+this generated configuration.  Runtime package configuration remains here.
 
 #+BEGIN_SRC emacs-lisp
-      (setq straight-use-package-by-default t)
-      ;; Ensure we can get packages from nongnu.org
-      (custom-set-variables
-       '(straight-recipe-overrides '((nil
-                                    (nongnu-elpa :type git
-                                                 :repo "https://github.com/emacsmirror/nongnu_elpa"
-                                                 :depth (full single-branch)
-                                                 :local-repo "nongnu-elpa"
-                                                 :build nil)))))
+  ;; GCMH - Garbage Collector Magic Hack for better performance
+  (use-package gcmh
+    :config
+    (gcmh-mode 1))
 
-      (defvar bootstrap-version)
-      (let ((bootstrap-file
-             (expand-file-name "straight/repos/straight.el/bootstrap.el"
-                               (or (bound-and-true-p straight-base-dir)
-                                   user-emacs-directory)))
-            (bootstrap-version 7))
-        (unless (file-exists-p bootstrap-file)
-          (with-current-buffer
-              (url-retrieve-synchronously
-               "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
-               'silent 'inhibit-cookies)
-              (goto-char (point-max))
-              (eval-print-last-sexp)))
-        (load bootstrap-file nil 'nomessage))
-
-      (straight-use-package 'use-package)
-      (setq use-package-always-ensure t)
-
-      ;; GCMH - Garbage Collector Magic Hack for better performance
-      (use-package gcmh
-        :config
-        (gcmh-mode 1))
-
-      ;; Ensure Emacs inherits environment variables from shell
-      ;; This sources ~/.secrets via interactive bash, picking up Vertex API keys
-      (use-package exec-path-from-shell
-        :if (or (daemonp) (memq window-system '(mac ns x pgtk)))
-        :custom
-        (exec-path-from-shell-variables
-         '("PATH"
-           "MANPATH"
-           ;; Claude Code / Vertex AI authentication
-           "ANTHROPIC_VERTEX_PROJECT_ID"
-           "CLOUD_ML_REGION"
-           "CLAUDE_CODE_USE_VERTEX"
-           ;; SSH agent for git operations
-           "SSH_AUTH_SOCK"
-           "SSH_AGENT_PID"
-           ;; GPG
-           "GPG_TTY"))
-        :config
-        (exec-path-from-shell-initialize))
+  ;; Ensure Emacs inherits environment variables from shell
+  ;; This sources ~/.secrets via interactive bash, picking up Vertex API keys
+  (use-package exec-path-from-shell
+    :if (or (daemonp) (memq window-system '(mac ns x pgtk)))
+    :custom
+    (exec-path-from-shell-variables
+     '("PATH"
+       "MANPATH"
+       ;; Claude Code / Vertex AI authentication
+       "ANTHROPIC_VERTEX_PROJECT_ID"
+       "CLOUD_ML_REGION"
+       "CLAUDE_CODE_USE_VERTEX"
+       ;; SSH agent for git operations
+       "SSH_AUTH_SOCK"
+       "SSH_AGENT_PID"
+       ;; GPG
+       "GPG_TTY"))
+    :config
+    (exec-path-from-shell-initialize))
 #+END_SRC
 
-** Early Org Mode Setup
-This configures Org mode basics, especially the function to automatically tangle this configuration file
-(`lit.org` -> `init.el`) every time it is saved.
+** Org Mode Setup
+This configures Org mode basics and automatically tangles `lit.org` to generated
+`lit.el` when this file is saved.  Tangling does not reload the running Emacs.
 
 #+BEGIN_SRC emacs-lisp
   (setq org-support-shift-select t)
@@ -118,10 +91,9 @@ This configures Org mode basics, especially the function to automatically tangle
   (defun my/org-babel-tangle-config ()
     "Auto-tangle config file on save."
     (condition-case err
-        (when (and (buffer-file-name)
-                   (string-equal (file-name-directory (buffer-file-name))
-                                 (expand-file-name user-emacs-directory)))
-          ;; Dynamic scoping to the rescue
+        (when (and buffer-file-name
+                   (file-equal-p buffer-file-name
+                                 (expand-file-name "lit.org" user-emacs-directory)))
           (let ((org-confirm-babel-evaluate nil))
             (org-babel-tangle)))
       (error
@@ -241,9 +213,7 @@ Additional packages that enhance the text editing experience beyond built-in fun
   ;; Move text (lines or regions) up and down
   (use-package move-text
     :bind (("M-<up>" . move-text-up)
-           ("M-<down>" . move-text-down))
-    :config
-    (move-text-default-bindings))
+           ("M-<down>" . move-text-down)))
 
   ;; Multiple cursors for simultaneous editing
   (use-package multiple-cursors
@@ -329,9 +299,10 @@ This setup enables undo-tree-mode, a more powerful way of handling undo/redo tha
     ;; Create the undo directory if it doesn't exist
     (undo-tree-history-directory-alist
      `(("." . ,(expand-file-name "undo/" user-emacs-directory))))
-    ;; Increase the amount of history stored
-    (undo-tree-buffer-size-limit (* 1024 1024 8)) ; 8MB
-    (undo-tree-max-history-size 1000)
+    ;; Bound undo history memory while retaining Undo-tree's tiered cleanup.
+    (undo-tree-limit 8388608)         ; 8 MiB
+    (undo-tree-strong-limit 12582912) ; 12 MiB
+    (undo-tree-outer-limit 37748736)  ; 36 MiB
     :config
     ;; Unbind C-/ from undo-tree to allow our comment binding
     (define-key undo-tree-map (kbd "C-/") nil))
@@ -372,16 +343,25 @@ settings for magit for more powerful git integration
 This section covers all visual aspects of Emacs, from fonts and colors to window layouts and completion UIs.
 
 ** Fonts (Fontaine)
-I use the `fontaine` package to easily switch between predefined font configurations. My default is `Source Code Pro` for code and `FiraGO` for proportional text.
+I use the `fontaine` package to easily switch between predefined font configurations. It prefers the Nerd Fonts build of Source Code Pro, then standard Source Code Pro, for the default face, with a generic monospace fallback.  Variable-pitch text uses a generic serif face.
 
 #+BEGIN_SRC emacs-lisp
   (use-package fontaine
     :demand t
     :init
-    (setq fontaine-latest-state-file
-          (locate-user-emacs-file "fontaine-latest-state.eld"))
-    (setq fontaine-presets
-          '((small
+    (let* ((families (font-family-list))
+           (default-font
+            (cond
+             ((member "SauceCodePro Nerd Font" families)
+              "SauceCodePro Nerd Font")
+             ((member "Source Code Pro" families)
+              "Source Code Pro")
+             (t "Monospace")))
+           (dyslexia-font (if (member "OpenDyslexic Nerd Font" families)
+                              "OpenDyslexic Nerd Font"
+                            "OpenDyslexic")))
+      (setq fontaine-presets
+            `((small
              :default-height 90)
             (regular
              :default-height 120)
@@ -393,20 +373,22 @@ I use the `fontaine` package to easily switch between predefined font configurat
              :default-height 180
              :bold-weight extrabold)
             (dyslexia-friendly
-             :default-family "OpenDyslexic"
-             :variable-pitch-family "OpenDyslexic"
+             :default-family ,dyslexia-font
+             :variable-pitch-family ,dyslexia-font
              :default-height 130
              :variable-pitch-height 1.1)
             (t ; our shared fallback properties
-             :default-family "Source Code Pro"
+             :default-family ,default-font
              :default-weight semilight
              :default-height 100
-             :variable-pitch-family "FiraGO"
+             :variable-pitch-family "Serif"
              :variable-pitch-weight normal
              :variable-pitch-height 1.05
              :bold-weight bold
-             :italic-slant italic)))
-    :bind ("C-c f" . fontaine-set-preset))
+             :italic-slant italic))))
+    :bind ("C-c f" . fontaine-set-preset)
+    :config
+    (fontaine-set-preset 'regular))
 
   ;; Pulsar briefly highlights the current line after certain commands
   ;; Excellent accessibility feature for tracking cursor movement
@@ -526,8 +508,9 @@ I use a modern completion system composed of several packages that work together
       (corfu-auto nil)
       (corfu-auto-delay 0.1)
       (corfu-quit-no-match 'separator)
-      ;; Disable corfu in modes where it's disruptive
-      (corfu-mode-modes '(not eshell-mode shell-mode term-mode))
+      ;; Enable Corfu globally except in terminal buffers.
+      (global-corfu-modes
+       '((not eshell-mode shell-mode term-mode ghostel-mode eat-mode) t))
       :init
       (global-corfu-mode))
 
@@ -603,19 +586,22 @@ Configuration for Dired, Emacs's built-in file manager.
     (dired-guess-shell-gnutar "tar"))
 
 
-  ;; Ranger-style file browser with three-pane layout and previews
+  ;; Ranger-style file browser with three-pane layout and previews.
+  ;; Avoid the observed Hydra-related failure in Ranger's compiled output.
   (use-package ranger
+    :straight (ranger :type git :host github
+                      :repo "punassuming/ranger.el"
+                      :local-repo "ranger.el"
+                      :build (:not compile))
     :bind (("C-x r d" . ranger)
            ("C-x r j" . deer))          ; Minimal ranger mode
     :custom
     (ranger-cleanup-eagerly t)          ; Clean up ranger buffers
     (ranger-cleanup-on-disable t)
-    (ranger-show-dotfiles t)
+    ;; Show dotfiles initially; `zh' cycles the supported visibility states.
+    (ranger-show-hidden 'format)
     (ranger-preview-file t)             ; Show file previews
-    (ranger-max-preview-size 10)        ; Limit preview to 10MB files
-    :config
-    ;; Don't show hidden files by default (toggle with zh)
-    (setq ranger-show-hidden nil))
+    (ranger-max-preview-size 10))       ; Limit preview to 10MB files
 
   ;; Modern icons for dired
   (use-package nerd-icons-dired
@@ -650,6 +636,7 @@ Additional UI packages that help with discoverability and navigation.
   ;; `which-key` displays available keybindings in a popup.
   (use-package which-key
     :ensure nil
+    :straight (:type built-in)
     :config
     (which-key-mode))
 
@@ -777,9 +764,7 @@ Helps improve writing clarity and catch common errors beyond spell-checking.
 
 #+BEGIN_SRC emacs-lisp
   (use-package writegood-mode
-    :hook (text-mode . writegood-mode)
-    :custom
-    (writegood-weasel-words-length 5))
+    :hook (text-mode . writegood-mode))
 
 #+END_SRC
 
@@ -842,21 +827,29 @@ language servers, and language-specific setups.
 These are language-agnostic tools that form the foundation of the IDE experience.
 
 #+BEGIN_SRC emacs-lisp
-    ;; `flymake` is the built-in alternative.
-    ;; I bind keys for navigating its diagnostics.
+    ;; Use Emacs's bundled cross-reference, diagnostics, and LSP clients.
+    (use-package xref
+      :ensure nil
+      :straight (:type built-in))
+
     (use-package flymake
       :ensure nil
+      :straight (:type built-in)
       :bind (("C-c l n" . flymake-goto-next-error)
              ("C-c l p" . flymake-goto-prev-error)))
 
-    ;; `eglot` is a minimal, built-in LSP client.
     (use-package eglot
       :ensure nil
+      :straight (:type built-in)
       :hook ((python-mode . eglot-ensure)
              (python-ts-mode . eglot-ensure)
              (js-mode . eglot-ensure)
+             (js-ts-mode . eglot-ensure)
              (typescript-mode . eglot-ensure)
-             (zig-mode . eglot-ensure))
+             (typescript-ts-mode . eglot-ensure)
+             (tsx-ts-mode . eglot-ensure)
+             (zig-mode . eglot-ensure)
+             (zig-ts-mode . eglot-ensure))
       :bind (("C-c l c" . eglot-reconnect)
              ("C-c l d" . flymake-show-buffer-diagnostics)
              ("C-c l f f" . eglot-format)
@@ -930,11 +923,16 @@ This section configures the Python development environment, including virtual en
           (list (lambda ()
                   (setq python-shell-interpreter "python3")))))
 
+  (defun my/python-mode-setup ()
+    "Use four-column indentation in Python buffers."
+    (setq-local tab-width 4)
+    (setq-local python-indent-offset 4))
+
   (use-package python
     :ensure nil
-    :hook (python-mode . (lambda ()
-                          (setq-local tab-width 4)
-                          (setq-local python-indent-offset 4)))
+    :straight (:type built-in)
+    :hook ((python-mode . my/python-mode-setup)
+           (python-ts-mode . my/python-mode-setup))
     :custom
     ;; Use the fast and powerful `ruff` linter for checking Python code.
     (python-check-command "ruff check --ignore-noqa"))
@@ -956,10 +954,14 @@ This section configures the Markdown syntax highlighting.
 This section configures Zig development support with syntax highlighting, LSP integration, and Tree-sitter parsing.
 
 #+BEGIN_SRC emacs-lisp
+  (defun my/zig-mode-setup ()
+    "Use four-column, space-only indentation in Zig buffers."
+    (setq-local tab-width 4)
+    (setq-local indent-tabs-mode nil))
+
   (use-package zig-mode
-    :hook (zig-mode . (lambda ()
-                       (setq-local tab-width 4)
-                       (setq-local indent-tabs-mode nil))))
+    :hook ((zig-mode . my/zig-mode-setup)
+           (zig-ts-mode . my/zig-mode-setup)))
 #+END_SRC
 
 ** Language: Nix
@@ -1085,6 +1087,7 @@ Custom helper functions provide integrated workflows leveraging treemacs, eat, m
 
   (use-package project
     :ensure nil
+    :straight (:type built-in)
     :bind (("C-x p p" . project-switch-project)
            ("C-x p f" . project-find-file)
            ("C-x p g" . project-find-regexp)
@@ -1466,15 +1469,22 @@ This section is for custom functions and global keybindings that don't belong to
 
   ;; Custom function to comment/uncomment line or region without moving cursor
   (defun my/comment-dwim-line-or-region ()
-    "Comment or uncomment current line or region without moving cursor."
+    "Toggle the region, enclosing comment, or current line without moving point."
     (interactive)
     (condition-case err
         (if (region-active-p)
             ;; If region is selected, comment/uncomment the region
             (comment-or-uncomment-region (region-beginning) (region-end))
-          ;; If no region, comment/uncomment current line without moving cursor
           (save-excursion
-            (comment-line 1)))
+            (comment-normalize-vars)
+            (if-let ((beginning (comment-beginning)))
+                (let ((end (progn
+                             (goto-char beginning)
+                             (comment-forward 1)
+                             (point))))
+                  (uncomment-region beginning end))
+              ;; Outside a comment, toggle the entire current line.
+              (comment-line 1))))
       (error
        (message "Error commenting: %s" (error-message-string err)))))
 

@@ -23,7 +23,14 @@
 ;; Bootstrap straight.el before loading Org.  `org-babel-load-file' would
 ;; otherwise load Emacs' built-in Org first, then straight.el may later load a
 ;; newer Org checkout, causing repeated "Org version mismatch" warnings.
-(setq straight-use-package-by-default t)
+(setq straight-use-package-by-default t
+      straight-recipe-overrides
+      '((nil
+         (nongnu-elpa :type git
+                      :repo "https://github.com/emacsmirror/nongnu_elpa"
+                      :depth (full single-branch)
+                      :local-repo "nongnu-elpa"
+                      :build nil))))
 
 (defvar bootstrap-version)
 (let ((bootstrap-file
@@ -54,12 +61,7 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(ignored-local-variable-values '((encoding . utf-8)))
- '(straight-recipe-overrides
-   '((nil
-      (nongnu-elpa :type git :repo "https://github.com/emacsmirror/nongnu_elpa"
-		   :depth (full single-branch) :local-repo "nongnu-elpa" :build
-		   nil)))))
+ '(ignored-local-variable-values '((encoding . utf-8))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
