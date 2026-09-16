@@ -199,6 +199,8 @@ C-c l f b - Format Buffer
 C-c l r n - Rename symbol
 C-c l s - Shutdown LSP
 C-c l i - toggle Inlay hints
+C-c l n - Next Flymake diagnostic
+C-c l p - Previous Flymake diagnostic
 ```
 *Mnemonic: "LSP" - Language intelligence features*
 
@@ -244,9 +246,7 @@ C-c d - Delete pair of delimiters
 C-c e - Environment commands (envrc: reload, allow, deny)
 C-c j - Join/toggle window split orientation
 C-c k - Kill buffer (bury)
-C-c n - Next error (flymake)
 C-c o - Olivetti focus mode
-C-c N - Previous error (flymake)
 C-c p - Package management prefix (straight.el)
 C-c r - Replace with regexp
 C-c w - Whitespace mode toggle
@@ -645,7 +645,7 @@ This configuration is built on carefully selected packages that work together se
 #### **Flymake** - Real-time Error Checking
 - **What it does**: Shows syntax errors and warnings in real-time
 - **Why it's better**: Immediate feedback, integrates with LSP
-- **How to use**: `C-c n`/`C-c N` for next/previous error
+- **How to use**: `C-c l n`/`C-c l p` for next/previous error
 - **Key features**: Real-time checking, multiple backends, visual indicators
 
 #### **Tree-sitter** (treesit-auto) - Advanced Syntax Parsing

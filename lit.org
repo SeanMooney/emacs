@@ -475,16 +475,25 @@ These settings control the appearance of the Emacs frame, windows, and how they 
     "Switch between horizontal and vertical split window layout."
     (interactive)
     (if (= (count-windows) 2)
-        (let* ((other-win (next-window))
-               ;; Is the split vertical? (i.e. do windows share a left edge)
-               (is-vertical-split (= (nth 0 (window-edges))
-                                     (nth 0 (window-edges other-win)))))
-          ;; Delete the other window, which collapses the split
+        (let* ((window (selected-window))
+               (other-window (next-window))
+               (window-edges (window-edges window))
+               (other-edges (window-edges other-window))
+               (window-second (or (> (car window-edges) (car other-edges))
+                                  (> (cadr window-edges) (cadr other-edges))))
+               (window-buffer (window-buffer window))
+               (other-buffer (window-buffer other-window))
+               (splitter (if (= (car window-edges) (car other-edges))
+                             #'split-window-right
+                           #'split-window-below)))
           (delete-other-windows)
-          ;; And re-split in the other direction
-          (if is-vertical-split
-              (split-window-horizontally)
-            (split-window-vertically)))
+          (let ((new-window (funcall splitter)))
+            (if window-second
+                (progn
+                  (set-window-buffer window other-buffer)
+                  (set-window-buffer new-window window-buffer)
+                  (select-window new-window))
+              (set-window-buffer new-window other-buffer))))
       (message "This command only works when there are exactly two windows.")))
   (global-set-key (kbd "C-c j") #'my/toggle-window-split)
 #+END_SRC
@@ -698,23 +707,20 @@ Additional UI packages that help with discoverability and navigation.
     (treemacs-project-follow-mode t))
 
   ;; Custom integration with project.el for single-project display
-  (defun my/treemacs-display-current-project-exclusively ()
-    "Display only the current project in treemacs, removing all others."
-    (when-let* ((project (project-current))
-                (project-root (project-root project)))
-      (treemacs-block-refresh
-        ;; Remove all projects from workspace
-        (dolist (proj (treemacs-workspace->projects (treemacs-current-workspace)))
-          (treemacs-do-remove-project-from-workspace proj t))
-        ;; Add and display only the current project
+  (defun my/treemacs-display-current-project-exclusively (&optional directory)
+    "Display only the project in DIRECTORY in treemacs."
+    (let ((default-directory (or directory default-directory)))
+      (when (project-current)
         (treemacs-add-and-display-current-project-exclusively))))
 
   ;; Advice to automatically update treemacs when switching projects
-  (defun my/treemacs-project-switch-advice (&rest _args)
-    "Advice function to update treemacs when switching projects."
+  (defun my/treemacs-project-switch-advice (directory)
+    "Update treemacs after switching to the project in DIRECTORY."
     (when (and (featurep 'treemacs)
                (treemacs-current-workspace))
-      (run-with-idle-timer 0.1 nil #'my/treemacs-display-current-project-exclusively)))
+      (run-with-idle-timer
+       0.1 nil #'my/treemacs-display-current-project-exclusively
+       directory)))
 
   ;; Add advice to project-switch-project
   (with-eval-after-load 'project
@@ -789,7 +795,8 @@ Particularly useful for catching typos in variable names and comments.
     (if (executable-find "codespell")
         (let ((temp-file (make-temp-file "codespell-")))
           (write-region (point-min) (point-max) temp-file)
-          (with-temp-buffer
+          (with-current-buffer (get-buffer-create "*codespell*")
+            (erase-buffer)
             (call-process "codespell" nil t nil temp-file)
             (if (> (buffer-size) 0)
                 (progn
@@ -805,7 +812,8 @@ Particularly useful for catching typos in variable names and comments.
     (if (executable-find "codespell")
         (let ((temp-file (make-temp-file "codespell-region-")))
           (write-region start end temp-file)
-          (with-temp-buffer
+          (with-current-buffer (get-buffer-create "*codespell*")
+            (erase-buffer)
             (call-process "codespell" nil t nil temp-file)
             (if (> (buffer-size) 0)
                 (progn
@@ -838,9 +846,8 @@ These are language-agnostic tools that form the foundation of the IDE experience
     ;; I bind keys for navigating its diagnostics.
     (use-package flymake
       :ensure nil
-      :bind (:map flymake-mode-map
-             ("C-c n" . flymake-goto-next-error)
-             ("C-c N" . flymake-goto-prev-error)))
+      :bind (("C-c l n" . flymake-goto-next-error)
+             ("C-c l p" . flymake-goto-prev-error)))
 
     ;; `eglot` is a minimal, built-in LSP client.
     (use-package eglot
@@ -1028,17 +1035,18 @@ Custom helper functions provide integrated workflows leveraging treemacs, eat, m
       (magit-status project-root)))
 
   (defun my/project-smart-compile ()
-    "Compile using project-appropriate command based on detected project type."
+    "Compile the current project with a command inferred from its root."
     (interactive)
-    (let* ((project-root (project-root (project-current)))
+    (let* ((project-root (project-root (project-current t)))
+           (default-directory project-root)
            (compile-cmd (cond
-                        ((file-exists-p (expand-file-name "Makefile" project-root)) "make")
-                        ((file-exists-p (expand-file-name "package.json" project-root)) "npm run build")
-                        ((file-exists-p (expand-file-name "Cargo.toml" project-root)) "cargo build")
-                        ((file-exists-p (expand-file-name "pyproject.toml" project-root)) "python -m build")
-                        ((file-exists-p (expand-file-name "CMakeLists.txt" project-root)) "cmake --build build")
-                        ((file-exists-p (expand-file-name "flake.nix" project-root)) "nix build")
-                        (t "make"))))
+                         ((file-exists-p "Makefile") "make")
+                         ((file-exists-p "package.json") "npm run build")
+                         ((file-exists-p "Cargo.toml") "cargo build")
+                         ((file-exists-p "pyproject.toml") "python -m build")
+                         ((file-exists-p "CMakeLists.txt") "cmake --build build")
+                         ((file-exists-p "flake.nix") "nix build")
+                         (t "make"))))
       (compile compile-cmd)))
 
   (defun my/consult-project-ripgrep ()
