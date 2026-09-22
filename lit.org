@@ -1628,6 +1628,24 @@ Custom helper functions provide integrated workflows leveraging treemacs, eat, m
           (find-file (completing-read "Recent project files: " project-files))
         (message "No recent files found in this project"))))
 
+  (defun my/project-remember-projects-under (dir max-depth)
+    "Remember projects under DIR, descending at most MAX-DEPTH levels."
+    (interactive "DDirectory: \nnMaximum depth: ")
+    (let ((directories (list (cons (expand-file-name dir) 0))))
+      (while directories
+        (let* ((entry (pop directories))
+               (directory (car entry))
+               (depth (cdr entry)))
+          (when-let ((project (project-current nil directory)))
+            (project-remember-project project nil t))
+          (when (< depth max-depth)
+            (dolist (child
+                     (directory-files
+                      directory t directory-files-no-dot-files-regexp))
+              (when (and (file-directory-p child)
+                         (not (file-symlink-p child)))
+                (push (cons child (1+ depth)) directories))))))))
+
   (use-package project
     :ensure nil
     :straight (:type built-in)

@@ -300,6 +300,7 @@ C-x p d - find Directory in project
 C-x p s - Shell in project
 C-x p e - Eshell in project
 C-x p b - project Buffers
+M-x my/project-remember-projects-under - Discover projects to a chosen depth
 ```
 *Mnemonic: "Project" - Project-aware operations*
 
